@@ -66,7 +66,7 @@ class EVM {
         ...transaction,
         signature,
       }).serialized
-      return this.provider.broadcastTransaction(serializedTransaction)
+      return await this.provider.broadcastTransaction(serializedTransaction)
     } catch (error) {
       console.error('Transaction execution failed:', error)
       throw new Error('Failed to send signed transaction.')
@@ -89,7 +89,7 @@ class EVM {
     maxPriorityFeePerGas: bigint
     maxFee: bigint
   }> {
-    return fetchEVMFeeProperties(
+    return await fetchEVMFeeProperties(
       this.provider._getConnection().url,
       transaction
     )
@@ -170,7 +170,12 @@ class EVM {
     path: string,
     nearNetworkId: NearNetworkIds
   ): Promise<string> {
-    return fetchDerivedEVMAddress(signerId, path, nearNetworkId, this.contract)
+    return await fetchDerivedEVMAddress(
+      signerId,
+      path,
+      nearNetworkId,
+      this.contract
+    )
   }
 
   /**
