@@ -10,6 +10,7 @@ import { type BigNumberish, ethers } from 'ethers'
 import { type UTXO } from '../chains/Bitcoin/types'
 import { type EVMChainConfigWithProviders } from '../chains/EVM/types'
 import {
+  type BTCNetworkIds,
   type ChainSignatureContracts,
   type NearNetworkIds,
 } from '../chains/types'
@@ -251,14 +252,14 @@ export async function fetchDerivedBTCAddressAndPublicKey(
 export async function fetchDerivedBTCAddress(
   signerId: string,
   path: string,
-  network: bitcoin.networks.Network,
+  network: BTCNetworkIds,
   nearNetworkId: NearNetworkIds,
   contract: ChainSignatureContracts
 ): Promise<string> {
   return await fetchDerivedBTCAddressAndPublicKey(
     signerId,
     path,
-    network,
+    network === 'testnet' ? bitcoin.networks.testnet : bitcoin.networks.bitcoin,
     nearNetworkId,
     contract
   ).then(({ address }) => address)
