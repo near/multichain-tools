@@ -1,10 +1,13 @@
 {
   "name": "multichain-tools",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "",
   "main": "index.js",
+  "typings": "index.d.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc --project tsconfig.json",
+    "deploy": "npm run build && cp package.json README.md dist/ && cd dist && npm publish"
   },
   "author": "",
   "license": "ISC",

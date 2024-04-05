@@ -121,10 +121,10 @@ class EVM {
       'latest'
     )
 
-    delete transaction.from
+    const { from, ...rest } = transaction
 
     return {
-      ...transaction,
+      ...rest,
       gasLimit,
       maxFeePerGas,
       maxPriorityFeePerGas,
