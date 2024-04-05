@@ -125,7 +125,7 @@ export class Bitcoin {
    * the value of the output in satoshis (`value`) and the locking script (`script`).
    */
   async fetchUTXOs(address: string): Promise<UTXO[]> {
-    return fetchBTCUTXOs(this.providerUrl, address)
+    return await fetchBTCUTXOs(this.providerUrl, address)
   }
 
   /**
@@ -139,7 +139,7 @@ export class Bitcoin {
    * @throws {Error} Throws an error if the fee rate data for the specified confirmation target is missing.
    */
   async fetchFeeRate(confirmationTarget = 6): Promise<number> {
-    return fetchBTCFeeRate(this.providerUrl, confirmationTarget)
+    return await fetchBTCFeeRate(this.providerUrl, confirmationTarget)
   }
 
   /**
@@ -201,7 +201,7 @@ export class Bitcoin {
     path: string,
     nearNetworkId: NearNetworkIds
   ): Promise<{ address: string; publicKey: Buffer }> {
-    return fetchDerivedBTCAddressAndPublicKey(
+    return await fetchDerivedBTCAddressAndPublicKey(
       signerId,
       path,
       this.network,
@@ -263,7 +263,7 @@ export class Bitcoin {
       }
       throw new Error(`Failed to broadcast transaction: ${response.data}`)
     } catch (error) {
-      throw new Error(`Error broadcasting transaction: ${error}`)
+      throw new Error(`Error broadcasting transaction: ${error as string}`)
     }
   }
 
@@ -290,7 +290,7 @@ export class Bitcoin {
     outputs: Array<{ address: string; value: number }>
     fee: number
   }> {
-    return fetchBTCFeeProperties(
+    return await fetchBTCFeeProperties(
       this.providerUrl,
       from,
       targets,
@@ -314,7 +314,7 @@ export class Bitcoin {
     data: BTCTransaction,
     nearAuthentication: NearAuthentication,
     path: string
-  ) {
+  ): Promise<string> {
     const { address, publicKey } = await this.deriveAddress(
       nearAuthentication.accountId,
       path,
@@ -334,7 +334,7 @@ export class Bitcoin {
     const psbt = new bitcoin.Psbt({ network: this.network })
 
     await Promise.all(
-      inputs.map(async (utxo) => {
+      inputs.map(async (utxo: UTXO) => {
         const transaction = await this.fetchTransaction(utxo.txid)
         let inputOptions
         if (transaction.outs[utxo.vout].script.includes('0014')) {
@@ -358,7 +358,7 @@ export class Bitcoin {
       })
     )
 
-    outputs.forEach((out) => {
+    outputs.forEach((out: { address: string; value: number }) => {
       if (!out.address) {
         out.address = address
       }

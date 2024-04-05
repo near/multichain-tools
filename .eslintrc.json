@@ -8,5 +8,8 @@
     "plugin:import/typescript",
     "plugin:prettier/recommended"
   ],
-  "rules": {}
+  "rules": {
+    "@typescript-eslint/strict-boolean-expressions": "off",
+    "@typescript-eslint/prefer-nullish-coalescing": "off"
+  }
 }

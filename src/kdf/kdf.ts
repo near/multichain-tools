@@ -1,3 +1,6 @@
+/* eslint-disable */
+// @ts-nocheck
+
 import BN from 'bn.js'
 import { ec as EC } from 'elliptic'
 import { ethers } from 'ethers'

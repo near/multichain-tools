@@ -27,7 +27,7 @@ export function parseSignedDelegateForRelayer(
           }
           return undefined
         })
-        .filter((t) => t),
+        .flatMap((t) => (t ? [t] : [])),
       nonce: signedDelegate.delegateAction.nonce.toNumber(),
       max_block_height: signedDelegate.delegateAction.maxBlockHeight.toNumber(),
       public_key: signedDelegate.delegateAction.publicKey.toString(),

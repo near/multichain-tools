@@ -10,6 +10,7 @@ import {
   type NearAuthentication,
 } from '../chains/types'
 import { parseSignedDelegateForRelayer } from '../relayer'
+import { type ExecutionOutcomeWithId } from 'near-api-js/lib/providers'
 
 const NEAR_MAX_GAS = new BN('300000000000000')
 
@@ -20,25 +21,28 @@ const toRVS = (signature: [string, string]): RSVSignature => {
   }
 }
 
+type MultiChainContract = Contract & {
+  public_key: () => Promise<string>
+  sign: (args: {
+    args: {
+      payload: number[]
+      path: string
+      key_version: number
+    }
+    gas: BN
+  }) => Promise<[string, string]>
+}
+
 const getMultichainContract = (
   account: Account,
   contract: ChainSignatureContracts
-) =>
-  new Contract(account, contract, {
+): MultiChainContract => {
+  return new Contract(account, contract, {
     viewMethods: ['public_key'],
     changeMethods: ['sign'],
-  }) as Contract & {
-    public_key: () => Promise<string>
-    // eslint-disable-next-line no-unused-vars
-    sign: (args: {
-      args: {
-        payload: number[]
-        path: string
-        key_version: number
-      }
-      gas: BN
-    }) => Promise<[string, string]>
-  }
+    useLocalViewExecution: false,
+  }) as MultiChainContract
+}
 
 interface SignParams {
   transactionHash: string | ethers.BytesLike
@@ -149,19 +153,22 @@ export const sign = async ({
       account.accountId
     )
 
-    const signature: string = txStatus.receipts_outcome.reduce((acc, curr) => {
-      if (acc) {
-        return acc
-      }
-      const { status } = curr.outcome
-      return (
-        typeof status === 'object' &&
-        status.SuccessValue &&
-        status.SuccessValue !== '' &&
-        Buffer.from(status.SuccessValue, 'base64').toString('utf-8')
-      )
-    }, '')
-
+    const signature: string = txStatus.receipts_outcome.reduce<string>(
+      (acc: string, curr: ExecutionOutcomeWithId) => {
+        if (acc) {
+          return acc
+        }
+        const { status } = curr.outcome
+        return (
+          (typeof status === 'object' &&
+            status.SuccessValue &&
+            status.SuccessValue !== '' &&
+            Buffer.from(status.SuccessValue, 'base64').toString('utf-8')) ||
+          ''
+        )
+      },
+      ''
+    )
     if (signature) {
       const parsedJSONSignature = JSON.parse(signature) as [string, string]
       return toRVS(parsedJSONSignature)
