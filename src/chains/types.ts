@@ -32,3 +32,4 @@ interface FailureResponse {
 export type Response = SuccessResponse | FailureResponse
 
 export type NearNetworkIds = 'mainnet' | 'testnet'
+export type BTCNetworkIds = 'mainnet' | 'testnet'

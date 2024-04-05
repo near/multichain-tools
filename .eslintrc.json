@@ -8,6 +8,9 @@
     "plugin:import/typescript",
     "plugin:prettier/recommended"
   ],
+  "parserOptions": {
+    "project": ["./tsconfig.json", "./tsconfig.eslint.json"]
+  },
   "rules": {
     "@typescript-eslint/strict-boolean-expressions": "off",
     "@typescript-eslint/prefer-nullish-coalescing": "off"

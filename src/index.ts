@@ -71,4 +71,5 @@ export {
   fetchDerivedBTCAddress,
   fetchEstimatedEVMFee,
   fetchEVMFeeProperties,
+  fetchDerivedBTCAddressAndPublicKey,
 } from './utils'
