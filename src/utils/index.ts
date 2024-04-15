@@ -181,7 +181,7 @@ export async function fetchBTCFeeProperties(
   const feeRate = await fetchBTCFeeRate(providerUrl, confirmationTarget)
 
   // Add a small amount to the fee rate to ensure the transaction is confirmed
-  const ret = coinselect(utxos, targets, feeRate + 1)
+  const ret = coinselect(utxos, targets, Math.ceil(feeRate + 1))
 
   if (!ret.inputs || !ret.outputs) {
     throw new Error(
