@@ -1,6 +1,6 @@
 # MultiChain Tools
 
-MultiChain Tools is a TypeScript package that provides a set of utilities and functions for interacting with various blockchain networks, including Ethereum (EVM-based chains) and Bitcoin. It offers an easy way to sign and send transactions, fetch derived addresses, and estimate transaction fees using a single NEAR account that controls the keys for other chains.
+MultiChain Tools is a TypeScript package that provides a set of utilities and functions for interacting with various blockchain networks, including Ethereum (EVM-based chains) and Bitcoin. It offers an easy way to sign and send transactions, fetch derived addresses, and estimate transaction fees using a single NEAR account that controls the keys for the other chains.
 
 ## Supported Chains
 
@@ -86,7 +86,6 @@ const evmRequest: EVMRequest = {
     keypair: nearAccountKeyPair,
     accountId: 'signer.near',
   },
-  fastAuthRelayerUrl: 'https://fastauth.example.com',
 }
 
 const response: Response = await signAndSendEVMTransaction(evmRequest)
@@ -110,7 +109,6 @@ typescriptCopy codeconst btcRequest: BitcoinRequest = {
     keypair: nearAccountKeyPair,
     accountId: 'signer.near',
   },
-  fastAuthRelayerUrl: 'https://fastauth.example.com',
 };
 
 const response: Response = await signAndSendBTCTransaction(btcRequest);
