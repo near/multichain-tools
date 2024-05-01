@@ -36,8 +36,7 @@ In this repository, we frequently utilize derived paths, which enable the genera
 
 For more detailed information, please refer to the [NEAR Documentation on Chain Signatures](https://docs.near.org/concepts/abstraction/chain-signatures#derivation-paths-one-account-multiple-chains).
 
-To ensure consistency and predictability in providing the key path, we employ Canonical
-Serialization. This standardizes the format of the path, making it easier to understand and use.
+To ensure consistency and predictability in providing the key path, we recommend using JSON Canonical Serialization. This standardizes the format of the path, making it easier to understand and use. But, you can also provide a plain string.
 
 Here's an example of how to provide a derived path using Canonical Serialization:
 
@@ -51,6 +50,12 @@ const derivedPath = canonicalize({
     prop1: 'prop1',
   },
 })
+```
+
+or
+
+```typescript
+const derivedPath = 'myderivedpath,btc'
 ```
 
 In the example above:
