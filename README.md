@@ -66,6 +66,20 @@ In the example above:
 
 By following this approach, you can create standardized and predictable derived paths for generating child keys based on a root key and a specific string combination.
 
+### Key Pair
+
+In this repository, we will also utilize NEAR account key pairs, which are essentially the private and public keys of an account used to sign transactions.
+
+To create a key pair, you can use the following code:
+
+```typescript
+import { KeyPair } from 'near-api-js'
+
+const nearAccountKeyPair = KeyPair.fromString(
+  process.env.NEXT_PUBLIC_NEAR_PRIVATE_KEY
+)
+```
+
 ## Examples
 
 Signing and Sending an EVM Transaction
