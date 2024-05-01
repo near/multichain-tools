@@ -1,6 +1,11 @@
 # MultiChain Tools
 
-MultiChain Tools is a TypeScript package that provides a set of utilities and functions for interacting with various blockchain networks, including Ethereum (EVM-based chains) and Bitcoin. It offers an easy way to sign and send transactions, fetch derived addresses, and estimate transaction fees.
+MultiChain Tools is a TypeScript package that provides a set of utilities and functions for interacting with various blockchain networks, including Ethereum (EVM-based chains) and Bitcoin. It offers an easy way to sign and send transactions, fetch derived addresses, and estimate transaction fees using a single NEAR account that controls the keys for other chains.
+
+## Supported Chains
+
+- BTC
+- EVM
 
 ## Installation
 
@@ -25,25 +30,56 @@ import {
 } from 'multichain-tools'
 ```
 
+### Derived Path
+
+In this repository, we frequently utilize derived paths, which enable the generation of new keys using the combination of a Root Key and a String, resulting in a Child Key.
+
+For more detailed information, please refer to the [NEAR Documentation on Chain Signatures](https://docs.near.org/concepts/abstraction/chain-signatures#derivation-paths-one-account-multiple-chains).
+
+To ensure consistency and predictability in providing the key path, we employ Canonical
+Serialization. This standardizes the format of the path, making it easier to understand and use.
+
+Here's an example of how to provide a derived path using Canonical Serialization:
+
+```typescript
+import canonicalize from 'canonicalize'
+
+const derivedPath = canonicalize({
+  chain: 'BTC',
+  domain: 'example.com',
+  meta: {
+    prop1: 'prop1',
+  },
+})
+```
+
+In the example above:
+
+- chain: Specifies the chain for which you are requesting the signature, such as BTC (Bitcoin), ETH (Ethereum), etc.
+- domain: Represents the domain of the dApp (e.g., www.example.com).
+- meta: Allows you to include any additional information you want to incorporate into the key path.
+
+By following this approach, you can create standardized and predictable derived paths for generating child keys based on a root key and a specific string combination.
+
 ## Examples
 
 Signing and Sending an EVM Transaction
 
 ```typescript
 const evmRequest: EVMRequest = {
+  transaction: {
+    to: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+    value: '1000000000000000000', // In wei
+    derivedPath,
+  },
   chainConfig: {
     providerUrl: 'https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID',
-    contract: '0x1234567890123456789012345678901234567890',
-  },
-  transaction: {
-    to: '0x0987654321098765432109876543210987654321',
-    value: '1000000000000000000', // 1 ETH
-    derivedPath: "m/44'/60'/0'/0/0",
+    contract: 'v2.multichain-mpc.testnet',
   },
   nearAuthentication: {
-    networkId: 'mainnet',
-    keypair: nearKeypair,
-    accountId: 'example.near',
+    networkId: 'testnet',
+    keypair: nearAccountKeyPair,
+    accountId: 'signer.near',
   },
   fastAuthRelayerUrl: 'https://fastauth.example.com',
 }
@@ -57,17 +93,17 @@ Signing and Sending a Bitcoin Transaction
 typescriptCopy codeconst btcRequest: BitcoinRequest = {
   chainConfig: {
     providerUrl: 'https://btc.example.com/api/',
-    contract: 'example.near',
+    contract: 'v2.multichain-mpc.testnet',
   },
   transaction: {
     to: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2',
-    value: '1000000', // 0.01 BTC
-    derivedPath: "m/44'/0'/0'/0/0",
+    value: '1000000', // In satoshis
+    derivedPath,
   },
   nearAuthentication: {
     networkId: 'mainnet',
-    keypair: nearKeypair,
-    accountId: 'example.near',
+    keypair: nearAccountKeyPair,
+    accountId: 'signer.near',
   },
   fastAuthRelayerUrl: 'https://fastauth.example.com',
 };
@@ -79,19 +115,19 @@ Fetching Derived Addresses
 
 ```typescript
 const evmAddress: string = await fetchDerivedEVMAddress(
-  'example.near',
-  "m/44'/60'/0'/0/0",
-  'mainnet',
-  'example.near'
+  'signer.near',
+  derivedPath,
+  'testnet',
+  'v2.multichain-mpc.testnet'
 )
 
 const { address: btcAddress, publicKey: btcPublicKey } =
   await fetchDerivedBTCAddressAndPublicKey(
-    'example.near',
-    "m/44'/0'/0'/0/0",
-    bitcoin.networks.mainnet,
-    'mainnet',
-    'example.near'
+    'signer.near',
+    derivedPath,
+    'testnet',
+    'testnet',
+    'v2.multichain-mpc.testnet'
   )
 ```
 
@@ -103,7 +139,6 @@ const evmFeeProperties = await fetchEVMFeeProperties(
   {
     to: '0x0987654321098765432109876543210987654321',
     value: ethers.parseEther('1'),
-    data: '0x',
   }
 )
 
