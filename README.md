@@ -112,6 +112,7 @@ typescriptCopy codeconst btcRequest: BitcoinRequest = {
   chainConfig: {
     providerUrl: 'https://btc.example.com/api/',
     contract: 'v2.multichain-mpc.testnet',
+    networkType: "testnet",
   },
   transaction: {
     to: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2',
@@ -138,11 +139,13 @@ const evmAddress: string = await fetchDerivedEVMAddress(
   'v2.multichain-mpc.testnet'
 )
 
+import * as bitcoinlib from 'bitcoinjs-lib'
+
 const { address: btcAddress, publicKey: btcPublicKey } =
   await fetchDerivedBTCAddressAndPublicKey(
     'signer.near',
     derivedPath,
-    'testnet',
+    bitcoinlib.networks.testnet,
     'testnet',
     'v2.multichain-mpc.testnet'
   )
