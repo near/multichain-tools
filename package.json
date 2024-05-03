@@ -1,6 +1,6 @@
 {
   "name": "multichain-tools",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "",
   "main": "index.js",
   "typings": "index.d.ts",

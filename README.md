@@ -108,11 +108,11 @@ const response: Response = await signAndSendEVMTransaction(evmRequest)
 Signing and Sending a Bitcoin Transaction
 
 ```typescript
-typescriptCopy codeconst btcRequest: BitcoinRequest = {
+const btcRequest: BitcoinRequest = {
   chainConfig: {
     providerUrl: 'https://btc.example.com/api/',
     contract: 'v2.multichain-mpc.testnet',
-    networkType: "testnet",
+    networkType: 'testnet',
   },
   transaction: {
     to: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2',
@@ -124,9 +124,9 @@ typescriptCopy codeconst btcRequest: BitcoinRequest = {
     keypair: nearAccountKeyPair,
     accountId: 'signer.near',
   },
-};
+}
 
-const response: Response = await signAndSendBTCTransaction(btcRequest);
+const response: Response = await signAndSendBTCTransaction(btcRequest)
 ```
 
 Fetching Derived Addresses
