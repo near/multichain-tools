@@ -11,6 +11,8 @@ import {
 } from '../chains/types'
 import { parseSignedDelegateForRelayer } from '../relayer'
 import { type ExecutionOutcomeWithId } from 'near-api-js/lib/providers'
+import { type KeyDerivationPath } from '../kdf/types'
+import { getCanonicalizedDerivationPath } from '../kdf/utils'
 
 const NEAR_MAX_GAS = new BN('300000000000000')
 
@@ -46,7 +48,7 @@ const getMultichainContract = (
 
 interface SignParams {
   transactionHash: string | ethers.BytesLike
-  path: string
+  path: KeyDerivationPath
   nearAuthentication: NearAuthentication
   contract: ChainSignatureContracts
   relayerUrl?: string
@@ -104,7 +106,7 @@ export const sign = async ({
     const [R, s] = await multichainContractAcc.sign({
       args: {
         payload,
-        path,
+        path: getCanonicalizedDerivationPath(path),
         key_version: 0,
       },
       gas: NEAR_MAX_GAS,

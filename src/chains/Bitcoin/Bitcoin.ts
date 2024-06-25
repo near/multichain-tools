@@ -1,19 +1,16 @@
 import axios from 'axios'
 import * as bitcoin from 'bitcoinjs-lib'
 
-import { type BTCTransaction, type UTXO } from './types'
+import { type BTCNetworkIds, type BTCTransaction, type UTXO } from './types'
 import { sign } from '../../signature'
 import {
   fetchBTCFeeProperties,
-  fetchBTCFeeRate,
   fetchBTCUTXOs,
   fetchDerivedBTCAddressAndPublicKey,
+  parseBTCNetwork,
 } from '../../utils'
-import {
-  type ChainSignatureContracts,
-  type NearAuthentication,
-  type NearNetworkIds,
-} from '../types'
+import { type ChainSignatureContracts, type NearAuthentication } from '../types'
+import { type KeyDerivationPath } from '../../kdf/types'
 
 interface Transaction {
   txid: string
@@ -55,10 +52,8 @@ interface Transaction {
   }
 }
 
-type NetworkType = 'bitcoin' | 'testnet'
-
 export class Bitcoin {
-  private readonly network: bitcoin.networks.Network
+  private readonly network: BTCNetworkIds
 
   private readonly providerUrl: string
 
@@ -67,15 +62,12 @@ export class Bitcoin {
   private readonly contract: ChainSignatureContracts
 
   constructor(config: {
-    networkType: NetworkType
+    network: BTCNetworkIds
     providerUrl: string
     relayerUrl?: string
     contract: ChainSignatureContracts
   }) {
-    this.network =
-      config.networkType === 'testnet'
-        ? bitcoin.networks.testnet
-        : bitcoin.networks.bitcoin
+    this.network = config.network
     this.providerUrl = config.providerUrl
     this.relayerUrl = config.relayerUrl
     this.contract = config.contract
@@ -110,36 +102,10 @@ export class Bitcoin {
    * @returns {Promise<string>} A promise that resolves to the balance of the address as a string.
    */
   async fetchBalance(address: string): Promise<string> {
-    const utxos = await this.fetchUTXOs(address)
+    const utxos = await fetchBTCUTXOs(this.providerUrl, address)
     return Bitcoin.toBTC(
       utxos.reduce((acc, utxo) => acc + utxo.value, 0)
     ).toString()
-  }
-
-  /**
-   * Fetches the Unspent Transaction Outputs (UTXOs) for a given Bitcoin address.
-   *
-   * @param {string} address - The Bitcoin address for which to fetch the UTXOs.
-   * @returns {Promise<UTXO[]>} A promise that resolves to an array of UTXOs.
-   * Each UTXO is represented as an object containing the transaction ID (`txid`), the output index within that transaction (`vout`),
-   * the value of the output in satoshis (`value`) and the locking script (`script`).
-   */
-  async fetchUTXOs(address: string): Promise<UTXO[]> {
-    return await fetchBTCUTXOs(this.providerUrl, address)
-  }
-
-  /**
-   * Fetches the current fee rate from the Bitcoin network.
-   * This method queries the RPC endpoint for fee estimates and returns the fee rate
-   * expected for a transaction to be confirmed within a certain number of blocks.
-   * The confirmation target is set to 6 blocks by default, which is commonly used
-   * for a balance between confirmation time and cost.
-   *
-   * @returns {Promise<number>} A promise that resolves to the fee rate in satoshis per byte.
-   * @throws {Error} Throws an error if the fee rate data for the specified confirmation target is missing.
-   */
-  async fetchFeeRate(confirmationTarget = 6): Promise<number> {
-    return await fetchBTCFeeRate(this.providerUrl, confirmationTarget)
   }
 
   /**
@@ -183,31 +149,6 @@ export class Bitcoin {
     })
 
     return tx
-  }
-
-  /**
-   * Derives a Bitcoin address and its corresponding public key for a given signer ID and derivation path.
-   * This method utilizes the root public key associated with the signer ID to generate a Bitcoin address
-   * and public key buffer based on the specified derivation path and network.
-   *
-   * @param {string} signerId - The unique identifier of the signer.
-   * @param {string} path - The derivation path used to generate the address.
-   * @param {bitcoin.networks.Network} network - The Bitcoin network (e.g., mainnet, testnet).
-   * @param {string} nearNetworkId - The network id used to interact with the NEAR blockchain.
-   * @returns {Promise<{ address: string; publicKey: Buffer }>} An object containing the derived Bitcoin address and its corresponding public key buffer.
-   */
-  async deriveAddress(
-    signerId: string,
-    path: string,
-    nearNetworkId: NearNetworkIds
-  ): Promise<{ address: string; publicKey: Buffer }> {
-    return await fetchDerivedBTCAddressAndPublicKey(
-      signerId,
-      path,
-      this.network,
-      nearNetworkId,
-      this.contract
-    )
   }
 
   /**
@@ -268,37 +209,6 @@ export class Bitcoin {
   }
 
   /**
-   * Calculates the fee properties for a Bitcoin transaction.
-   * This function fetches the Unspent Transaction Outputs (UTXOs) for the given address,
-   * and the fee rate for the specified confirmation target. It then uses the `coinselect` algorithm
-   * to select the UTXOs to be spent and calculates the fee required for the transaction.
-   *
-   * @param {string} from - The Bitcoin address from which the transaction is to be sent.
-   * @param {Array<{address: string, value: number}>} targets - An array of target addresses and values (in satoshis) to send.
-   * @param {number} [confirmationTarget=6] - The desired number of blocks in which the transaction should be confirmed.
-   * @returns {Promise<{inputs: UTXO[], outputs: {address: string, value: number}[], fee: number}>} A promise that resolves to an object containing the inputs (selected UTXOs), outputs (destination addresses and values), and the transaction fee in satoshis.
-   */
-  async getFeeProperties(
-    from: string,
-    targets: Array<{
-      address: string
-      value: number
-    }>,
-    confirmationTarget = 6
-  ): Promise<{
-    inputs: UTXO[]
-    outputs: Array<{ address: string; value: number }>
-    fee: number
-  }> {
-    return await fetchBTCFeeProperties(
-      this.providerUrl,
-      from,
-      targets,
-      confirmationTarget
-    )
-  }
-
-  /**
    * Handles the process of creating and broadcasting a Bitcoin transaction.
    * This function takes the recipient's address, the amount to send, the account details,
    * and the derived path for the account to create a transaction. It then signs the transaction
@@ -313,25 +223,29 @@ export class Bitcoin {
   async handleTransaction(
     data: BTCTransaction,
     nearAuthentication: NearAuthentication,
-    path: string
+    path: KeyDerivationPath
   ): Promise<string> {
-    const { address, publicKey } = await this.deriveAddress(
+    const { address, publicKey } = await fetchDerivedBTCAddressAndPublicKey(
       nearAuthentication.accountId,
       path,
-      nearAuthentication.networkId
+      this.network,
+      nearAuthentication.networkId,
+      this.contract
     )
 
     const { inputs, outputs } =
       data.inputs && data.outputs
         ? data
-        : await this.getFeeProperties(address, [
+        : await fetchBTCFeeProperties(this.providerUrl, address, [
             {
               address: data.to,
               value: parseFloat(data.value),
             },
           ])
 
-    const psbt = new bitcoin.Psbt({ network: this.network })
+    const psbt = new bitcoin.Psbt({
+      network: parseBTCNetwork(this.network),
+    })
 
     await Promise.all(
       inputs.map(async (utxo: UTXO) => {

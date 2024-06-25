@@ -1,8 +1,5 @@
-import {
-  type BaseTransaction,
-  type ChainProvider,
-  type NearAuthentication,
-} from '../types'
+import { type KeyDerivationPath } from '../../kdf/types'
+import { type ChainProvider, type NearAuthentication } from '../types'
 
 export interface UTXO {
   txid: string
@@ -16,17 +13,19 @@ interface BtcInputsAndOutputs {
   outputs: Array<{ address: string; value: number }>
 }
 
-export type BTCTransaction = BaseTransaction &
-  (
-    | BtcInputsAndOutputs
-    | {
-        inputs?: never
-        outputs?: never
-      }
-  )
+export type BTCTransaction = {
+  to: string
+  value: string
+} & (
+  | BtcInputsAndOutputs
+  | {
+      inputs?: never
+      outputs?: never
+    }
+)
 
 export type BTCChainConfigWithProviders = ChainProvider & {
-  networkType: 'bitcoin' | 'testnet'
+  network: BTCNetworkIds
 }
 
 export interface BitcoinRequest {
@@ -34,6 +33,7 @@ export interface BitcoinRequest {
   chainConfig: BTCChainConfigWithProviders
   nearAuthentication: NearAuthentication
   fastAuthRelayerUrl?: string
+  derivationPath: KeyDerivationPath
 }
 
-export type BTCNetworks = 'mainnet' | 'testnet'
+export type BTCNetworkIds = 'mainnet' | 'testnet' | 'regtest'

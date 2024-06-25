@@ -16,7 +16,7 @@ export const signAndSendEVMTransaction = async (
     const res = await evm.handleTransaction(
       req.transaction,
       req.nearAuthentication,
-      req.transaction.derivedPath
+      req.derivationPath
     )
 
     if (res) {
@@ -50,7 +50,7 @@ export const signAndSendBTCTransaction = async (
     const txid = await btc.handleTransaction(
       req.transaction,
       req.nearAuthentication,
-      req.transaction.derivedPath
+      req.derivationPath
     )
 
     return {
@@ -67,15 +67,11 @@ export const signAndSendBTCTransaction = async (
 
 export {
   fetchDerivedEVMAddress,
-  fetchBTCFeeProperties,
-  fetchDerivedBTCAddress,
-  fetchEstimatedEVMFee,
   fetchEVMFeeProperties,
+  fetchBTCFeeProperties,
   fetchDerivedBTCAddressAndPublicKey,
 } from './utils'
 
-export type {
-  NearNetworkIds,
-  ChainSignatureContracts,
-  BTCNetworkIds,
-} from './chains/types'
+export type { NearNetworkIds, ChainSignatureContracts } from './chains/types'
+
+export { type BTCNetworkIds } from './chains/Bitcoin/types'
