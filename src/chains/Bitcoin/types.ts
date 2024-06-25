@@ -1,5 +1,10 @@
 import { type KeyDerivationPath } from '../../kdf/types'
-import { type ChainProvider, type NearAuthentication } from '../types'
+import {
+  type ChainSignatureContracts,
+  type NearNetworkIds,
+  type ChainProvider,
+  type NearAuthentication,
+} from '../types'
 
 export interface UTXO {
   txid: string
@@ -37,3 +42,11 @@ export interface BitcoinRequest {
 }
 
 export type BTCNetworkIds = 'mainnet' | 'testnet' | 'regtest'
+
+export interface BitcoinPublicKeyAndAddressRequest {
+  signerId: string
+  path: KeyDerivationPath
+  network: BTCNetworkIds
+  nearNetworkId: NearNetworkIds
+  contract: ChainSignatureContracts
+}

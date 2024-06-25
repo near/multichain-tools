@@ -8,7 +8,7 @@ import {
   fetchBTCUTXOs,
   fetchDerivedBTCAddressAndPublicKey,
   parseBTCNetwork,
-} from '../../utils'
+} from './utils'
 import { type ChainSignatureContracts, type NearAuthentication } from '../types'
 import { type KeyDerivationPath } from '../../kdf/types'
 
@@ -225,13 +225,13 @@ export class Bitcoin {
     nearAuthentication: NearAuthentication,
     path: KeyDerivationPath
   ): Promise<string> {
-    const { address, publicKey } = await fetchDerivedBTCAddressAndPublicKey(
-      nearAuthentication.accountId,
+    const { address, publicKey } = await fetchDerivedBTCAddressAndPublicKey({
+      signerId: nearAuthentication.accountId,
       path,
-      this.network,
-      nearAuthentication.networkId,
-      this.contract
-    )
+      network: this.network,
+      nearNetworkId: nearAuthentication.networkId,
+      contract: this.contract,
+    })
 
     const { inputs, outputs } =
       data.inputs && data.outputs

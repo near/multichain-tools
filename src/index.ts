@@ -66,11 +66,17 @@ export const signAndSendBTCTransaction = async (
 }
 
 export {
-  fetchDerivedEVMAddress,
-  fetchEVMFeeProperties,
   fetchBTCFeeProperties,
   fetchDerivedBTCAddressAndPublicKey,
-} from './utils'
+} from './chains/Bitcoin/utils'
+
+export {
+  fetchDerivedEVMAddress,
+  fetchEVMFeeProperties,
+} from './chains/EVM/utils'
+
+export type { FetchEVMAddressRequest } from './chains/EVM/types'
+export type { BitcoinPublicKeyAndAddressRequest } from './chains/Bitcoin/types'
 
 export type { NearNetworkIds, ChainSignatureContracts } from './chains/types'
 

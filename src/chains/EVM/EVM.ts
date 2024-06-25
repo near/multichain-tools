@@ -1,7 +1,7 @@
 import { ethers, keccak256 } from 'ethers'
 
 import { sign } from '../../signature'
-import { fetchDerivedEVMAddress, fetchEVMFeeProperties } from '../../utils'
+import { fetchDerivedEVMAddress, fetchEVMFeeProperties } from './utils'
 import { type ChainSignatureContracts, type NearAuthentication } from '../types'
 import { type EVMTransaction } from './types'
 import { type KeyDerivationPath } from '../../kdf/types'
@@ -146,12 +146,12 @@ class EVM {
     nearAuthentication: NearAuthentication,
     path: KeyDerivationPath
   ): Promise<ethers.TransactionResponse | undefined> {
-    const from = await fetchDerivedEVMAddress(
-      nearAuthentication.accountId,
+    const from = await fetchDerivedEVMAddress({
+      signerId: nearAuthentication.accountId,
       path,
-      nearAuthentication.networkId,
-      this.contract
-    )
+      nearNetworkId: nearAuthentication.networkId,
+      multichainContractId: this.contract,
+    })
 
     const transaction = await this.attachGasAndNonce({
       ...data,
