@@ -46,7 +46,7 @@ export type BTCNetworkIds = 'mainnet' | 'testnet' | 'regtest'
 export interface BitcoinPublicKeyAndAddressRequest {
   signerId: string
   path: KeyDerivationPath
-  network: BTCNetworkIds
+  btcNetworkId: BTCNetworkIds
   nearNetworkId: NearNetworkIds
-  contract: ChainSignatureContracts
+  multichainContractId: ChainSignatureContracts
 }

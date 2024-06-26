@@ -81,3 +81,8 @@ export type { BitcoinPublicKeyAndAddressRequest } from './chains/Bitcoin/types'
 export type { NearNetworkIds, ChainSignatureContracts } from './chains/types'
 
 export { type BTCNetworkIds } from './chains/Bitcoin/types'
+
+export { type EVMRequest } from './chains/EVM/types'
+export { type BitcoinRequest } from './chains/Bitcoin/types'
+
+export type { SLIP044ChainId } from './kdf/types'

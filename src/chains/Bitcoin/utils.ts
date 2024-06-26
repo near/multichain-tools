@@ -119,14 +119,14 @@ export async function fetchBTCFeeProperties(
 export async function fetchDerivedBTCAddressAndPublicKey({
   signerId,
   path,
-  network,
+  btcNetworkId,
   nearNetworkId,
-  contract,
+  multichainContractId,
 }: BitcoinPublicKeyAndAddressRequest): Promise<{
   address: string
   publicKey: Buffer
 }> {
-  const contractRootPublicKey = await getRootPublicKey(contract, nearNetworkId)
+  const contractRootPublicKey = await getRootPublicKey(multichainContractId, nearNetworkId)
 
   if (!contractRootPublicKey) {
     throw new Error('Failed to fetch root public key')
@@ -142,7 +142,7 @@ export async function fetchDerivedBTCAddressAndPublicKey({
 
   const { address } = bitcoin.payments.p2pkh({
     pubkey: publicKeyBuffer,
-    network: parseBTCNetwork(network),
+    network: parseBTCNetwork(btcNetworkId),
   })
 
   if (!address) {
