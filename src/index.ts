@@ -86,3 +86,5 @@ export { type EVMRequest } from './chains/EVM/types'
 export { type BitcoinRequest } from './chains/Bitcoin/types'
 
 export type { SLIP044ChainId, KeyDerivationPath } from './kdf/types'
+export type { BTCChainConfigWithProviders } from './chains/Bitcoin/types'
+export type { EVMChainConfigWithProviders } from './chains/EVM/types'
