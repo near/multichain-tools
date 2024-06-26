@@ -1,9 +1,10 @@
+/* eslint-disable @typescript-eslint/prefer-ts-expect-error */
 import axios from 'axios'
 import * as bitcoin from 'bitcoinjs-lib'
 
 // There is no types for coinselect
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error
+// @ts-ignore
 import coinselect from 'coinselect'
 
 import { type BitcoinPublicKeyAndAddressRequest, type UTXO } from './types'
@@ -126,7 +127,10 @@ export async function fetchDerivedBTCAddressAndPublicKey({
   address: string
   publicKey: Buffer
 }> {
-  const contractRootPublicKey = await getRootPublicKey(multichainContractId, nearNetworkId)
+  const contractRootPublicKey = await getRootPublicKey(
+    multichainContractId,
+    nearNetworkId
+  )
 
   if (!contractRootPublicKey) {
     throw new Error('Failed to fetch root public key')

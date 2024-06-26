@@ -100,15 +100,17 @@ export const sign = async ({
 
   const payload = Array.from(ethers.getBytes(transactionHash)).slice().reverse()
 
+  const contractFunctionCallArgs = {
+    payload,
+    path: getCanonicalizedDerivationPath(path),
+    key_version: 0,
+  }
+
   if (!relayerUrl) {
     const multichainContractAcc = getMultichainContract(account, contract)
 
     const [R, s] = await multichainContractAcc.sign({
-      args: {
-        payload,
-        path: getCanonicalizedDerivationPath(path),
-        key_version: 0,
-      },
+      args: contractFunctionCallArgs,
       gas: NEAR_MAX_GAS,
     })
 
@@ -117,11 +119,7 @@ export const sign = async ({
 
   const functionCall = actionCreators.functionCall(
     'sign',
-    {
-      payload,
-      path,
-      key_version: 0,
-    },
+    contractFunctionCallArgs,
     NEAR_MAX_GAS,
     new BN(0)
   )
