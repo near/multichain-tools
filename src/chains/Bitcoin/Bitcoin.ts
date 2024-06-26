@@ -228,9 +228,9 @@ export class Bitcoin {
     const { address, publicKey } = await fetchDerivedBTCAddressAndPublicKey({
       signerId: nearAuthentication.accountId,
       path,
-      network: this.network,
+      btcNetworkId: this.network,
       nearNetworkId: nearAuthentication.networkId,
-      contract: this.contract,
+      multichainContractId: this.contract,
     })
 
     const { inputs, outputs } =

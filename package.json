@@ -7,7 +7,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc --project tsconfig.json",
-    "deploy": "npm run build && cp package.json README.md dist/ && cd dist && npm publish"
+    "pre:deploy": "npm run build && cp package.json README.md dist/",
+    "deploy": "npm run pre:deploy && cd dist && npm publish"
   },
   "author": "",
   "license": "ISC",
