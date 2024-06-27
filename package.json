@@ -1,6 +1,6 @@
 {
   "name": "multichain-tools",
-  "version": "1.0.12",
+  "version": "1.0.13-beta.3",
   "description": "",
   "main": "index.js",
   "typings": "index.d.ts",
@@ -8,7 +8,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc --project tsconfig.json",
     "pre:deploy": "npm run build && cp package.json README.md dist/",
-    "deploy": "npm run pre:deploy && cd dist && npm publish"
+    "deploy": "npm run pre:deploy && cd dist && npm publish",
+    "deploy:beta": "npm run pre:deploy && cd dist && npm publish --tag beta"
   },
   "author": "",
   "license": "ISC",
