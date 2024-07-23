@@ -13,21 +13,19 @@ export const signAndSendEVMTransaction = async (
       relayerUrl: req.fastAuthRelayerUrl,
     })
 
-    const res = await evm.handleTransaction(
-      req.transaction,
-      req.nearAuthentication,
-      req.derivationPath
-    )
+    // Retry to up to 3 times to handle nonce issue
+    for (let i = 0; i < 3; i++) {
+      const res = await evm.handleTransaction(
+        req.transaction,
+        req.nearAuthentication,
+        req.derivationPath
+      )
 
-    if (res) {
-      return {
-        transactionHash: res.hash,
-        success: true,
-      }
-    } else {
-      return {
-        success: false,
-        errorMessage: 'Transaction failed',
+      if (res?.hash) {
+        return {
+          transactionHash: res.hash,
+          success: true,
+        }
       }
     }
   } catch (e: unknown) {
@@ -35,6 +33,11 @@ export const signAndSendEVMTransaction = async (
       success: false,
       errorMessage: e instanceof Error ? e.message : String(e),
     }
+  }
+
+  return {
+    success: false,
+    errorMessage: 'Transaction failed',
   }
 }
 
