@@ -117,71 +117,68 @@ export const sign = async ({
     return toRVS([R, s])
   }
 
-  const functionCall = actionCreators.functionCall(
-    'sign',
-    contractFunctionCallArgs,
-    NEAR_MAX_GAS,
-    new BN(0)
-  )
+  // Retry at most 3 times on nonce error
+  for (let i = 0; i < 3; i++) {
+    try {
+      const functionCall = actionCreators.functionCall(
+        'sign',
+        contractFunctionCallArgs,
+        NEAR_MAX_GAS,
+        new BN(0)
+      )
 
-  const signedDelegate = await account.signedDelegate({
-    receiverId: contract,
-    actions: [functionCall],
-    blockHeightTtl: 60,
-  })
+      const signedDelegate = await account.signedDelegate({
+        receiverId: contract,
+        actions: [functionCall],
+        blockHeightTtl: 60,
+      })
+      // Remove the cached access key to prevent nonce reuse
+      delete account.accessKeyByPublicKeyCache[
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+        signedDelegate.delegateAction.publicKey.toString()
+      ]
 
-  // TODO: add support for creating the signed delegate using the mpc recovery service with an oidc_token
+      // TODO: add support for creating the signed delegate using the mpc recovery service with an oidc_token
 
-  const res = await fetch(`${relayerUrl}/send_meta_tx_async`, {
-    method: 'POST',
-    mode: 'cors',
-    body: JSON.stringify(parseSignedDelegateForRelayer(signedDelegate)),
-    headers: new Headers({ 'Content-Type': 'application/json' }),
-  })
+      const res = await fetch(`${relayerUrl}/send_meta_tx_async`, {
+        method: 'POST',
+        mode: 'cors',
+        body: JSON.stringify(parseSignedDelegateForRelayer(signedDelegate)),
+        headers: new Headers({ 'Content-Type': 'application/json' }),
+      })
 
-  const txHash = await res.text()
+      const txHash = await res.text()
+      const txStatus = await account.connection.provider.txStatus(
+        txHash,
+        account.accountId
+      )
 
-  // TODO: check if we really need to retry here
-  let attempts = 0
-  const getSignature = async (): Promise<RSVSignature> => {
-    if (attempts >= 3) {
-      throw new Error('Signature error, please retry')
+      const signature: string = txStatus.receipts_outcome.reduce<string>(
+        (acc: string, curr: ExecutionOutcomeWithId) => {
+          if (acc) {
+            return acc
+          }
+          const { status } = curr.outcome
+          return (
+            (typeof status === 'object' &&
+              status.SuccessValue &&
+              status.SuccessValue !== '' &&
+              Buffer.from(status.SuccessValue, 'base64').toString('utf-8')) ||
+            ''
+          )
+        },
+        ''
+      )
+      if (signature) {
+        const parsedJSONSignature = JSON.parse(signature) as [string, string]
+        return toRVS(parsedJSONSignature)
+      }
+    } catch (e) {
+      console.error(e)
     }
-
-    const txStatus = await account.connection.provider.txStatus(
-      txHash,
-      account.accountId
-    )
-
-    const signature: string = txStatus.receipts_outcome.reduce<string>(
-      (acc: string, curr: ExecutionOutcomeWithId) => {
-        if (acc) {
-          return acc
-        }
-        const { status } = curr.outcome
-        return (
-          (typeof status === 'object' &&
-            status.SuccessValue &&
-            status.SuccessValue !== '' &&
-            Buffer.from(status.SuccessValue, 'base64').toString('utf-8')) ||
-          ''
-        )
-      },
-      ''
-    )
-    if (signature) {
-      const parsedJSONSignature = JSON.parse(signature) as [string, string]
-      return toRVS(parsedJSONSignature)
-    }
-
-    await new Promise((resolve) => {
-      setTimeout(resolve, 10000)
-    })
-    attempts += 1
-    return await getSignature()
   }
 
-  return await getSignature()
+  throw new Error('Signature error, please retry')
 }
 
 export async function getRootPublicKey(
