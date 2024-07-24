@@ -133,7 +133,7 @@ export const sign = async ({
     'sign',
     { request: signArgs },
     NEAR_MAX_GAS,
-    new BN(0)
+    new BN(1)
   )
 
   const signedDelegate = await account.signedDelegate({
@@ -182,8 +182,8 @@ export const sign = async ({
       ''
     )
     if (signature) {
-      const parsedJSONSignature = JSON.parse(signature) as MPCSignature
-      return toRVS(parsedJSONSignature)
+      const parsedJSONSignature = JSON.parse(signature) as { Ok: MPCSignature }
+      return toRVS(parsedJSONSignature.Ok)
     }
 
     await new Promise((resolve) => {
