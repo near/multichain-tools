@@ -130,66 +130,64 @@ export const sign = async ({
 
     return toRVS(signature)
   }
-  for (let i = 0; i < 3; i++) {
-    try {
-      const functionCall = actionCreators.functionCall(
-        'sign',
-        { request: signArgs },
-        NEAR_MAX_GAS,
-        new BN(1)
-      )
+  try {
+    const functionCall = actionCreators.functionCall(
+      'sign',
+      { request: signArgs },
+      NEAR_MAX_GAS,
+      new BN(1)
+    )
 
-      const signedDelegate = await account.signedDelegate({
-        receiverId: contract,
-        actions: [functionCall],
-        blockHeightTtl: 60,
-      })
-      // Remove the cached access key to prevent nonce reuse
-      delete account.accessKeyByPublicKeyCache[
-        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-        signedDelegate.delegateAction.publicKey.toString()
-      ]
+    const signedDelegate = await account.signedDelegate({
+      receiverId: contract,
+      actions: [functionCall],
+      blockHeightTtl: 60,
+    })
+    // Remove the cached access key to prevent nonce reuse
+    delete account.accessKeyByPublicKeyCache[
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+      signedDelegate.delegateAction.publicKey.toString()
+    ]
 
-      // TODO: add support for creating the signed delegate using the mpc recovery service with an oidc_token
+    // TODO: add support for creating the signed delegate using the mpc recovery service with an oidc_token
 
-      const res = await fetch(`${relayerUrl}/send_meta_tx_async`, {
-        method: 'POST',
-        mode: 'cors',
-        body: JSON.stringify(parseSignedDelegateForRelayer(signedDelegate)),
-        headers: new Headers({ 'Content-Type': 'application/json' }),
-      })
+    const res = await fetch(`${relayerUrl}/send_meta_tx_async`, {
+      method: 'POST',
+      mode: 'cors',
+      body: JSON.stringify(parseSignedDelegateForRelayer(signedDelegate)),
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+    })
 
-      const txHash = await res.text()
-      const txStatus = await account.connection.provider.txStatus(
-        txHash,
-        account.accountId
-      )
+    const txHash = await res.text()
+    const txStatus = await account.connection.provider.txStatus(
+      txHash,
+      account.accountId
+    )
 
-      const signature: string = txStatus.receipts_outcome.reduce<string>(
-        (acc: string, curr: ExecutionOutcomeWithId) => {
-          if (acc) {
-            return acc
-          }
-          const { status } = curr.outcome
-          return (
-            (typeof status === 'object' &&
-              status.SuccessValue &&
-              status.SuccessValue !== '' &&
-              Buffer.from(status.SuccessValue, 'base64').toString('utf-8')) ||
-            ''
-          )
-        },
-        ''
-      )
-      if (signature) {
-        const parsedJSONSignature = JSON.parse(signature) as {
-          Ok: MPCSignature
+    const signature: string = txStatus.receipts_outcome.reduce<string>(
+      (acc: string, curr: ExecutionOutcomeWithId) => {
+        if (acc) {
+          return acc
         }
-        return toRVS(parsedJSONSignature.Ok)
+        const { status } = curr.outcome
+        return (
+          (typeof status === 'object' &&
+            status.SuccessValue &&
+            status.SuccessValue !== '' &&
+            Buffer.from(status.SuccessValue, 'base64').toString('utf-8')) ||
+          ''
+        )
+      },
+      ''
+    )
+    if (signature) {
+      const parsedJSONSignature = JSON.parse(signature) as {
+        Ok: MPCSignature
       }
-    } catch (e) {
-      console.error(e)
+      return toRVS(parsedJSONSignature.Ok)
     }
+  } catch (e) {
+    console.error(e)
   }
 
   throw new Error('Signature error, please retry')
