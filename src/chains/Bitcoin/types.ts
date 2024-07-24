@@ -1,5 +1,7 @@
+import { type KeyDerivationPath } from '../../kdf/types'
 import {
-  type BaseTransaction,
+  type ChainSignatureContracts,
+  type NearNetworkIds,
   type ChainProvider,
   type NearAuthentication,
 } from '../types'
@@ -16,17 +18,19 @@ interface BtcInputsAndOutputs {
   outputs: Array<{ address: string; value: number }>
 }
 
-export type BTCTransaction = BaseTransaction &
-  (
-    | BtcInputsAndOutputs
-    | {
-        inputs?: never
-        outputs?: never
-      }
-  )
+export type BTCTransaction = {
+  to: string
+  value: string
+} & (
+  | BtcInputsAndOutputs
+  | {
+      inputs?: never
+      outputs?: never
+    }
+)
 
 export type BTCChainConfigWithProviders = ChainProvider & {
-  networkType: 'bitcoin' | 'testnet'
+  network: BTCNetworkIds
 }
 
 export interface BitcoinRequest {
@@ -34,6 +38,15 @@ export interface BitcoinRequest {
   chainConfig: BTCChainConfigWithProviders
   nearAuthentication: NearAuthentication
   fastAuthRelayerUrl?: string
+  derivationPath: KeyDerivationPath
 }
 
-export type BTCNetworks = 'mainnet' | 'testnet'
+export type BTCNetworkIds = 'mainnet' | 'testnet' | 'regtest'
+
+export interface BitcoinPublicKeyAndAddressRequest {
+  signerId: string
+  path: KeyDerivationPath
+  btcNetworkId: BTCNetworkIds
+  nearNetworkId: NearNetworkIds
+  multichainContractId: ChainSignatureContracts
+}

@@ -16,7 +16,7 @@ export const signAndSendEVMTransaction = async (
     const res = await evm.handleTransaction(
       req.transaction,
       req.nearAuthentication,
-      req.transaction.derivedPath
+      req.derivationPath
     )
 
     if (res) {
@@ -50,7 +50,7 @@ export const signAndSendBTCTransaction = async (
     const txid = await btc.handleTransaction(
       req.transaction,
       req.nearAuthentication,
-      req.transaction.derivedPath
+      req.derivationPath
     )
 
     return {
@@ -66,16 +66,25 @@ export const signAndSendBTCTransaction = async (
 }
 
 export {
-  fetchDerivedEVMAddress,
   fetchBTCFeeProperties,
-  fetchDerivedBTCAddress,
-  fetchEstimatedEVMFee,
-  fetchEVMFeeProperties,
   fetchDerivedBTCAddressAndPublicKey,
-} from './utils'
+} from './chains/Bitcoin/utils'
 
-export type {
-  NearNetworkIds,
-  ChainSignatureContracts,
-  BTCNetworkIds,
-} from './chains/types'
+export {
+  fetchDerivedEVMAddress,
+  fetchEVMFeeProperties,
+} from './chains/EVM/utils'
+
+export type { FetchEVMAddressRequest } from './chains/EVM/types'
+export type { BitcoinPublicKeyAndAddressRequest } from './chains/Bitcoin/types'
+
+export type { NearNetworkIds, ChainSignatureContracts } from './chains/types'
+
+export { type BTCNetworkIds } from './chains/Bitcoin/types'
+
+export { type EVMRequest } from './chains/EVM/types'
+export { type BitcoinRequest } from './chains/Bitcoin/types'
+
+export type { SLIP044ChainId, KeyDerivationPath } from './kdf/types'
+export type { BTCChainConfigWithProviders } from './chains/Bitcoin/types'
+export type { EVMChainConfigWithProviders } from './chains/EVM/types'

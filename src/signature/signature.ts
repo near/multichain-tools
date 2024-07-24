@@ -11,6 +11,8 @@ import {
 } from '../chains/types'
 import { parseSignedDelegateForRelayer } from '../relayer'
 import { type ExecutionOutcomeWithId } from 'near-api-js/lib/providers'
+import { type KeyDerivationPath } from '../kdf/types'
+import { getCanonicalizedDerivationPath } from '../kdf/utils'
 
 const NEAR_MAX_GAS = new BN('300000000000000')
 
@@ -59,7 +61,7 @@ const getMultichainContract = (
 
 interface SignParams {
   transactionHash: string | ethers.BytesLike
-  path: string
+  path: KeyDerivationPath
   nearAuthentication: NearAuthentication
   contract: ChainSignatureContracts
   relayerUrl?: string
@@ -113,7 +115,7 @@ export const sign = async ({
 
   const signArgs = {
     payload,
-    path,
+    path: getCanonicalizedDerivationPath(path),
     key_version: 0,
   }
 
@@ -128,38 +130,35 @@ export const sign = async ({
 
     return toRVS(signature)
   }
+  try {
+    const functionCall = actionCreators.functionCall(
+      'sign',
+      { request: signArgs },
+      NEAR_MAX_GAS,
+      new BN(1)
+    )
 
-  const functionCall = actionCreators.functionCall(
-    'sign',
-    { request: signArgs },
-    NEAR_MAX_GAS,
-    new BN(1)
-  )
+    const signedDelegate = await account.signedDelegate({
+      receiverId: contract,
+      actions: [functionCall],
+      blockHeightTtl: 60,
+    })
+    // Remove the cached access key to prevent nonce reuse
+    delete account.accessKeyByPublicKeyCache[
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+      signedDelegate.delegateAction.publicKey.toString()
+    ]
 
-  const signedDelegate = await account.signedDelegate({
-    receiverId: contract,
-    actions: [functionCall],
-    blockHeightTtl: 60,
-  })
+    // TODO: add support for creating the signed delegate using the mpc recovery service with an oidc_token
 
-  // TODO: add support for creating the signed delegate using the mpc recovery service with an oidc_token
+    const res = await fetch(`${relayerUrl}/send_meta_tx_async`, {
+      method: 'POST',
+      mode: 'cors',
+      body: JSON.stringify(parseSignedDelegateForRelayer(signedDelegate)),
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+    })
 
-  const res = await fetch(`${relayerUrl}/send_meta_tx_async`, {
-    method: 'POST',
-    mode: 'cors',
-    body: JSON.stringify(parseSignedDelegateForRelayer(signedDelegate)),
-    headers: new Headers({ 'Content-Type': 'application/json' }),
-  })
-
-  const txHash = await res.text()
-
-  // TODO: check if we really need to retry here
-  let attempts = 0
-  const getSignature = async (): Promise<RSVSignature> => {
-    if (attempts >= 3) {
-      throw new Error('Signature error, please retry')
-    }
-
+    const txHash = await res.text()
     const txStatus = await account.connection.provider.txStatus(
       txHash,
       account.accountId
@@ -182,18 +181,16 @@ export const sign = async ({
       ''
     )
     if (signature) {
-      const parsedJSONSignature = JSON.parse(signature) as { Ok: MPCSignature }
+      const parsedJSONSignature = JSON.parse(signature) as {
+        Ok: MPCSignature
+      }
       return toRVS(parsedJSONSignature.Ok)
     }
-
-    await new Promise((resolve) => {
-      setTimeout(resolve, 10000)
-    })
-    attempts += 1
-    return await getSignature()
+  } catch (e) {
+    console.error(e)
   }
 
-  return await getSignature()
+  throw new Error('Signature error, please retry')
 }
 
 export async function getRootPublicKey(
