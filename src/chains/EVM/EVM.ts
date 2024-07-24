@@ -217,25 +217,12 @@ class EVM {
     if (signature) {
       const r = `0x${signature.r}`
       const s = `0x${signature.s}`
-      const v = [0, 1].find((currV) => {
-        const address = ethers.recoverAddress(transactionHash, {
-          r,
-          s,
-          v: currV,
-        })
-
-        return from.toLowerCase() === address.toLowerCase()
-      })
-
-      if (v === undefined) {
-        throw new Error('Failed to recover address from signature.')
-      }
+      const v = signature.v
 
       const transactionResponse = await this.sendSignedTransaction(
         transaction,
         ethers.Signature.from({ r, s, v })
       )
-
       return transactionResponse
     }
 
