@@ -1,6 +1,6 @@
 {
   "name": "multichain-tools",
-  "version": "1.0.12",
+  "version": "2.0.12",
   "description": "",
   "main": "index.js",
   "typings": "index.d.ts",
@@ -32,6 +32,7 @@
     "coinselect": "^3.1.13",
     "elliptic": "^6.5.5",
     "ethers": "^6.11.1",
+    "js-sha3": "^0.9.3",
     "near-api-js": "^3.0.4"
   }
 }
