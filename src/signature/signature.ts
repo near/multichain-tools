@@ -16,23 +16,36 @@ import { getCanonicalizedDerivationPath } from '../kdf/utils'
 
 const NEAR_MAX_GAS = new BN('300000000000000')
 
-const toRVS = (signature: [string, string]): RSVSignature => {
+const toRVS = (signature: MPCSignature): RSVSignature => {
   return {
-    r: signature[0].slice(2),
-    s: signature[1],
+    r: signature.big_r.affine_point.substring(2),
+    s: signature.s.scalar,
+    v: signature.recovery_id,
   }
+}
+
+interface SignArgs {
+  payload: number[]
+  path: string
+  key_version: number
+}
+interface MPCSignature {
+  big_r: {
+    affine_point: string
+  }
+  s: {
+    scalar: string
+  }
+  recovery_id: number
 }
 
 type MultiChainContract = Contract & {
   public_key: () => Promise<string>
   sign: (args: {
-    args: {
-      payload: number[]
-      path: string
-      key_version: number
-    }
+    args: { request: SignArgs }
     gas: BN
-  }) => Promise<[string, string]>
+    amount: BN
+  }) => Promise<MPCSignature>
 }
 
 const getMultichainContract = (
@@ -98,9 +111,9 @@ export const sign = async ({
 
   const account = new Account(connection, nearAuthentication.accountId)
 
-  const payload = Array.from(ethers.getBytes(transactionHash)).slice().reverse()
+  const payload = Array.from(ethers.getBytes(transactionHash))
 
-  const contractFunctionCallArgs = {
+  const signArgs = {
     payload,
     path: getCanonicalizedDerivationPath(path),
     key_version: 0,
@@ -109,22 +122,21 @@ export const sign = async ({
   if (!relayerUrl) {
     const multichainContractAcc = getMultichainContract(account, contract)
 
-    const [R, s] = await multichainContractAcc.sign({
-      args: contractFunctionCallArgs,
+    const signature = await multichainContractAcc.sign({
+      args: { request: signArgs },
       gas: NEAR_MAX_GAS,
+      amount: new BN(1),
     })
 
-    return toRVS([R, s])
+    return toRVS(signature)
   }
-
-  // Retry at most 3 times on nonce error
   for (let i = 0; i < 3; i++) {
     try {
       const functionCall = actionCreators.functionCall(
         'sign',
-        contractFunctionCallArgs,
+        { request: signArgs },
         NEAR_MAX_GAS,
-        new BN(0)
+        new BN(1)
       )
 
       const signedDelegate = await account.signedDelegate({
@@ -170,8 +182,10 @@ export const sign = async ({
         ''
       )
       if (signature) {
-        const parsedJSONSignature = JSON.parse(signature) as [string, string]
-        return toRVS(parsedJSONSignature)
+        const parsedJSONSignature = JSON.parse(signature) as {
+          Ok: MPCSignature
+        }
+        return toRVS(parsedJSONSignature.Ok)
       }
     } catch (e) {
       console.error(e)
