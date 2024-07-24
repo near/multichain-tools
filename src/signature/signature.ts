@@ -96,7 +96,7 @@ export const sign = async ({
 
   const account = new Account(connection, nearAuthentication.accountId)
 
-  const payload = Array.from(ethers.getBytes(transactionHash)).slice().reverse()
+  const payload = Array.from(ethers.getBytes(transactionHash))
 
   if (!relayerUrl) {
     const multichainContractAcc = getMultichainContract(account, contract)

@@ -1,43 +1,30 @@
-/* eslint-disable */
-// @ts-nocheck
-
-import BN from 'bn.js'
 import { ec as EC } from 'elliptic'
 import { ethers } from 'ethers'
+import { sha3_256 } from 'js-sha3'
 import { base_decode } from 'near-api-js/lib/utils/serialize'
 
-function najPublicKeyStrToUncompressedHexPoint(najPublicKeyStr) {
+function najPublicKeyStrToUncompressedHexPoint(
+  najPublicKeyStr: string
+): string {
   return `04${Buffer.from(base_decode(najPublicKeyStr.split(':')[1])).toString('hex')}`
 }
 
-async function sha256Hash(str) {
+async function sha3Hash(str: string): Promise<string> {
   const encoder = new TextEncoder()
   const data = encoder.encode(str)
 
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-
-  const hashArray = [...(new Uint8Array(hashBuffer) as any)]
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-function sha256StringToScalarLittleEndian(hashString) {
-  const littleEndianString = hashString.match(/../g).reverse().join('')
-
-  const scalar = new BN(littleEndianString, 16)
-
-  return scalar
+  return sha3_256(data)
 }
 
 async function deriveChildPublicKey(
-  parentUncompressedPublicKeyHex,
-  signerId,
-  path = ''
-) {
+  parentUncompressedPublicKeyHex: string,
+  signerId: string,
+  path: string = ''
+): Promise<string> {
   const ec = new EC('secp256k1')
-  let scalar = await sha256Hash(
+  const scalar = await sha3Hash(
     `near-mpc-recovery v0.1.0 epsilon derivation:${signerId},${path}`
   )
-  scalar = sha256StringToScalarLittleEndian(scalar) as any
 
   const x = parentUncompressedPublicKeyHex.substring(2, 66)
   const y = parentUncompressedPublicKeyHex.substring(66)
@@ -61,7 +48,7 @@ export const generateEthereumAddress = async (
   signerId: string,
   path: string,
   publicKey: string
-) => {
+): Promise<string> => {
   const uncompressedHexPoint = najPublicKeyStrToUncompressedHexPoint(publicKey)
   const childPublicKey = await deriveChildPublicKey(
     uncompressedHexPoint,

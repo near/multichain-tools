@@ -32,6 +32,7 @@
     "coinselect": "^3.1.13",
     "elliptic": "^6.5.5",
     "ethers": "^6.11.1",
+    "js-sha3": "^0.9.3",
     "near-api-js": "^3.0.4"
   }
 }
