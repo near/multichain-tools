@@ -11,19 +11,27 @@ export interface UTXO {
   script: string
 }
 
+export type BTCOutput =
+  | {
+      address: string
+      value: number
+    }
+  | {
+      script: Buffer
+      value: number
+    }
+
 interface BtcInputsAndOutputs {
   inputs: UTXO[]
-  outputs: Array<{ address: string; value: number }>
+  outputs: BTCOutput[]
 }
 
-export type BTCTransaction = BaseTransaction &
-  (
-    | BtcInputsAndOutputs
-    | {
-        inputs?: never
-        outputs?: never
-      }
-  )
+export type BTCTransaction =
+  | (Omit<BaseTransaction, 'to' | 'value'> & BtcInputsAndOutputs)
+  | (BaseTransaction & {
+      inputs?: never
+      outputs?: never
+    })
 
 export type BTCChainConfigWithProviders = ChainProvider & {
   networkType: 'bitcoin' | 'testnet'

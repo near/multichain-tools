@@ -1,7 +1,7 @@
 import axios from 'axios'
 import * as bitcoin from 'bitcoinjs-lib'
 
-import { type BTCTransaction, type UTXO } from './types'
+import { type BTCOutput, type BTCTransaction, type UTXO } from './types'
 import { sign } from '../../signature'
 import {
   fetchBTCFeeProperties,
@@ -287,7 +287,7 @@ export class Bitcoin {
     confirmationTarget = 6
   ): Promise<{
     inputs: UTXO[]
-    outputs: Array<{ address: string; value: number }>
+    outputs: BTCOutput[]
     fee: number
   }> {
     return await fetchBTCFeeProperties(
@@ -358,15 +358,18 @@ export class Bitcoin {
       })
     )
 
-    outputs.forEach((out: { address: string; value: number }) => {
-      if (!out.address) {
-        out.address = address
+    outputs.forEach((out: BTCOutput) => {
+      if ('script' in out) {
+        psbt.addOutput({
+          script: out.script,
+          value: out.value,
+        })
+      } else {
+        psbt.addOutput({
+          address: out.address || address,
+          value: out.value,
+        })
       }
-
-      psbt.addOutput({
-        address: out.address,
-        value: out.value,
-      })
     })
 
     const mpcKeyPair = {
