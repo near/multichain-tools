@@ -7,7 +7,7 @@ import * as bitcoin from 'bitcoinjs-lib'
 import coinselect from 'coinselect'
 import { type BigNumberish, ethers } from 'ethers'
 
-import { type UTXO } from '../chains/Bitcoin/types'
+import { type BTCOutput, type UTXO } from '../chains/Bitcoin/types'
 import { type EVMChainConfigWithProviders } from '../chains/EVM/types'
 import {
   type BTCNetworkIds,
@@ -167,14 +167,11 @@ export async function fetchBTCUTXOs(
 export async function fetchBTCFeeProperties(
   providerUrl: string,
   from: string,
-  targets: Array<{
-    address: string
-    value: number
-  }>,
+  targets: BTCOutput[],
   confirmationTarget = 6
 ): Promise<{
   inputs: UTXO[]
-  outputs: Array<{ address: string; value: number }>
+  outputs: BTCOutput[]
   fee: number
 }> {
   const utxos = await fetchBTCUTXOs(providerUrl, from)
