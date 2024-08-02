@@ -16,7 +16,7 @@ async function sha3Hash(str: string): Promise<string> {
   return sha3_256(data)
 }
 
-async function deriveChildPublicKey(
+export async function deriveChildPublicKey(
   parentUncompressedPublicKeyHex: string,
   signerId: string,
   path: string = ''
