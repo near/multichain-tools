@@ -30,15 +30,17 @@
     "jest": "^29.7.0",
     "prettier": "^3.2.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5.4.3"
+    "typescript": "^5.5.4"
   },
   "dependencies": {
+    "@types/express": "^4.17.21",
     "axios": "^1.6.8",
     "bitcoinjs-lib": "^6.1.5",
     "bn.js": "^5.2.1",
     "coinselect": "^3.1.13",
     "elliptic": "^6.5.5",
     "ethers": "^6.11.1",
+    "express": "^4.19.2",
     "js-sha3": "^0.9.3",
     "near-api-js": "^3.0.4"
   }
