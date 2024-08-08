@@ -64,7 +64,7 @@ resource "google_cloud_run_service" "contract_ping" {
           }
         }
         env {
-          name = "NEXT_PUBLIC_CHAIN_SIGNATURE_CONTRACT_DEV_TESTNET"
+          name = "NEXT_PUBLIC_CHAIN_SIGNATURE_CONTRACT"
           value_from {
             secret_key_ref {
               name = "contract_ping_chain_sig_dev_contract_testnet"

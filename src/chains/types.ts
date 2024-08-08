@@ -14,7 +14,7 @@ export interface ChainProvider {
 }
 
 export interface NearAuthentication {
-  networkId: 'testnet' | 'mainnet'
+  networkId: string
   keypair: KeyPair
   accountId: string
 }
@@ -31,5 +31,5 @@ interface FailureResponse {
 
 export type Response = SuccessResponse | FailureResponse
 
-export type NearNetworkIds = 'mainnet' | 'testnet'
+export type NearNetworkIds = string
 export type BTCNetworkIds = 'mainnet' | 'testnet'

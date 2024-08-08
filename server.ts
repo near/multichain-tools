@@ -23,10 +23,10 @@ app.post('/ping', async (req, res) => {
     keypair: KeyPair.fromString(
       process.env.NEXT_PUBLIC_NEAR_PRIVATE_KEY || ''
     ),
-    networkId: 'testnet',
+    networkId: process.env.NEXT_PUBLIC_NETWORK_ID || '',
   };
   const contract: ChainSignatureContracts =
-    process.env.NEXT_PUBLIC_CHAIN_SIGNATURE_CONTRACT_DEV_TESTNET || '';
+    process.env.NEXT_PUBLIC_CHAIN_SIGNATURE_CONTRACT || '';
 
   try {
     const signature = await sign({
