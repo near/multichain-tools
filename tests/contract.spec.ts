@@ -1,6 +1,9 @@
 import { describe, test, expect } from '@jest/globals'
 import { ethers } from 'ethers'
-import { sign } from '../src/signature/signature'
+import {
+  getExperimentalSignatureDeposit,
+  sign,
+} from '../src/signature/signature'
 import {
   type NearAuthentication,
   type ChainSignatureContracts,
@@ -51,6 +54,35 @@ describe('Chain Signature', () => {
       })
 
       expect(recoveredAddress.toLowerCase()).toBe(ethereumAddress.toLowerCase())
+    } catch (error) {
+      if (error instanceof Error) {
+        console.log('ERROR:', error.message)
+      } else {
+        console.log('An unknown error occurred: ', error)
+      }
+    }
+  }, 30000)
+
+  test('should retrieve the experimental signature deposit', async () => {
+    const nearAuthentication: NearAuthentication = {
+      accountId: process.env.NEXT_PUBLIC_NEAR_ACCOUNT_ID_TESTNET || '',
+      keypair: KeyPair.fromString(
+        process.env.NEXT_PUBLIC_NEAR_PRIVATE_KEY_TESTNET || ''
+      ),
+      networkId: 'testnet',
+    }
+    const contract: ChainSignatureContracts =
+      process.env.NEXT_PUBLIC_CHAIN_SIGNATURE_CONTRACT_DEV_TESTNET || ''
+
+    try {
+      const deposit = await getExperimentalSignatureDeposit(
+        contract,
+        nearAuthentication.networkId
+      )
+
+      expect(deposit).toBeDefined()
+      expect(typeof deposit).toBe('number')
+      console.log('Deposit:', deposit)
     } catch (error) {
       if (error instanceof Error) {
         console.log('ERROR:', error.message)
