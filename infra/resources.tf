@@ -1,12 +1,7 @@
-variable "project_id" {
-  default     = "pagoda-discovery-platform-dev"
-  description = "The default project id to use for resources in this directory."
-}
-
 terraform {
   backend "gcs" {
-    bucket = "pagoda-discovery-platform-dev"
-    prefix = "multichain-terraform-dev/state/tools/contract-ping"
+    bucket = "multichain-terraform-dev"
+    prefix = "state/tools/contract-ping"
   }
 }
 
