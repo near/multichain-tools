@@ -123,7 +123,7 @@ export const sign = async ({
     const signature = await multichainContractAcc.sign({
       args: { request: signArgs },
       gas: NEAR_MAX_GAS,
-      amount: new BN(1),
+      amount: nearAuthentication.deposit ?? new BN(1),
     })
 
     return toRVS(signature)
@@ -133,7 +133,7 @@ export const sign = async ({
     'sign',
     { request: signArgs },
     NEAR_MAX_GAS,
-    new BN(1)
+    nearAuthentication.deposit ?? new BN(1)
   )
 
   const signedDelegate = await account.signedDelegate({

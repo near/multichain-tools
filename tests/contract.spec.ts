@@ -8,6 +8,7 @@ import {
 import dotenv from 'dotenv'
 import { KeyPair } from 'near-api-js'
 import { fetchDerivedEVMAddress } from '../src'
+import BN from 'bn.js'
 
 dotenv.config()
 
@@ -16,14 +17,15 @@ describe('Chain Signature', () => {
     const transactionHash = ethers.randomBytes(32)
     const path = "m/44'/60'/0'/0/0"
     const nearAuthentication: NearAuthentication = {
-      accountId: process.env.NEXT_PUBLIC_NEAR_ACCOUNT_ID || '',
+      accountId: process.env.NEXT_PUBLIC_NEAR_ACCOUNT_ID_TESTNET || '',
+      deposit: new BN(5),
       keypair: KeyPair.fromString(
-        process.env.NEXT_PUBLIC_NEAR_PRIVATE_KEY || ''
+        process.env.NEXT_PUBLIC_NEAR_PRIVATE_KEY_TESTNET || ''
       ),
       networkId: 'testnet',
     }
     const contract: ChainSignatureContracts =
-      process.env.NEXT_PUBLIC_CHAIN_SIGNATURE_CONTRACT || ''
+      process.env.NEXT_PUBLIC_CHAIN_SIGNATURE_CONTRACT_DEV_TESTNET || ''
 
     try {
       const signature = await sign({
