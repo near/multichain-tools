@@ -1,4 +1,5 @@
 import { type KeyPair } from '@near-js/crypto'
+import type BN from 'bn.js'
 
 export type ChainSignatureContracts = string
 
@@ -11,6 +12,7 @@ export interface NearAuthentication {
   networkId: NearNetworkIds
   keypair: KeyPair
   accountId: string
+  deposit?: BN
 }
 
 interface SuccessResponse {

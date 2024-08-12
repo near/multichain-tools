@@ -13,9 +13,19 @@ export interface UTXO {
   script: string
 }
 
+export type BTCOutput =
+  | {
+      address: string
+      value: number
+    }
+  | {
+      script: Buffer
+      value: number
+    }
+
 interface BtcInputsAndOutputs {
   inputs: UTXO[]
-  outputs: Array<{ address: string; value: number }>
+  outputs: BTCOutput[]
 }
 
 export type BTCTransaction = {

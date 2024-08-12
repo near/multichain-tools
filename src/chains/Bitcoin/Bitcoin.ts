@@ -1,7 +1,7 @@
 import axios from 'axios'
 import * as bitcoin from 'bitcoinjs-lib'
 
-import { type BTCNetworkIds, type BTCTransaction, type UTXO } from './types'
+
 import { sign } from '../../signature'
 import {
   fetchBTCFeeProperties,
@@ -11,6 +11,7 @@ import {
 } from './utils'
 import { type ChainSignatureContracts, type NearAuthentication } from '../types'
 import { type KeyDerivationPath } from '../../kdf/types'
+import { BTCNetworkIds, BTCTransaction, UTXO, BTCOutput } from './types'
 
 interface Transaction {
   txid: string
@@ -272,15 +273,18 @@ export class Bitcoin {
       })
     )
 
-    outputs.forEach((out: { address: string; value: number }) => {
-      if (!out.address) {
-        out.address = address
+    outputs.forEach((out: BTCOutput) => {
+      if ('script' in out) {
+        psbt.addOutput({
+          script: out.script,
+          value: out.value,
+        })
+      } else {
+        psbt.addOutput({
+          address: out.address || address,
+          value: out.value,
+        })
       }
-
-      psbt.addOutput({
-        address: out.address,
-        value: out.value,
-      })
     })
 
     const mpcKeyPair = {

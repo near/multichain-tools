@@ -7,11 +7,10 @@ import * as bitcoin from 'bitcoinjs-lib'
 // @ts-ignore
 import coinselect from 'coinselect'
 
-import { type BitcoinPublicKeyAndAddressRequest, type UTXO } from './types'
-
+import { BTCOutput, type BitcoinPublicKeyAndAddressRequest, type UTXO } from './types'
+import { getCanonicalizedDerivationPath } from '../../kdf/utils'
 import { generateBTCAddress } from '../../kdf/kdf'
 import { getRootPublicKey } from '../../signature'
-import { getCanonicalizedDerivationPath } from '../../kdf/utils'
 
 /**
  * Fetches the current fee rate from the Bitcoin network.
@@ -80,14 +79,11 @@ export async function fetchBTCUTXOs(
 export async function fetchBTCFeeProperties(
   providerUrl: string,
   from: string,
-  targets: Array<{
-    address: string
-    value: number
-  }>,
+  targets: BTCOutput[],
   confirmationTarget = 6
 ): Promise<{
   inputs: UTXO[]
-  outputs: Array<{ address: string; value: number }>
+  outputs: BTCOutput[]
   fee: number
 }> {
   const utxos = await fetchBTCUTXOs(providerUrl, from)

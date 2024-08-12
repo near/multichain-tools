@@ -13,6 +13,7 @@ import { parseSignedDelegateForRelayer } from '../relayer'
 import { type ExecutionOutcomeWithId } from 'near-api-js/lib/providers'
 import { type KeyDerivationPath } from '../kdf/types'
 import { getCanonicalizedDerivationPath } from '../kdf/utils'
+import { KeyPair } from 'near-api-js'
 
 const NEAR_MAX_GAS = new BN('300000000000000')
 
@@ -46,6 +47,7 @@ type MultiChainContract = Contract & {
     gas: BN
     amount: BN
   }) => Promise<MPCSignature>
+  experimental_signature_deposit: () => Promise<string>
 }
 
 const getMultichainContract = (
@@ -53,10 +55,35 @@ const getMultichainContract = (
   contract: ChainSignatureContracts
 ): MultiChainContract => {
   return new Contract(account, contract, {
-    viewMethods: ['public_key'],
+    viewMethods: ['public_key', 'experimental_signature_deposit'],
     changeMethods: ['sign'],
     useLocalViewExecution: false,
   }) as MultiChainContract
+}
+
+const setConnection = async (
+  networkId: string,
+  accountId: string,
+  keypair: KeyPair
+): Promise<Account> => {
+  const keyStore = new InMemoryKeyStore()
+  await keyStore.setKey(networkId, accountId, keypair)
+
+  const connection = Connection.fromConfig({
+    networkId,
+    provider: {
+      type: 'JsonRpcProvider',
+      args: {
+        url: {
+          testnet: 'https://rpc.testnet.near.org',
+          mainnet: 'https://rpc.mainnet.near.org',
+        }[networkId],
+      },
+    },
+    signer: { type: 'InMemorySigner', keyStore },
+  })
+
+  return new Account(connection, accountId)
 }
 
 interface SignParams {
@@ -88,28 +115,11 @@ export const sign = async ({
   contract,
   relayerUrl,
 }: SignParams): Promise<RSVSignature> => {
-  const keyStore = new InMemoryKeyStore()
-  await keyStore.setKey(
+  const account = await setConnection(
     nearAuthentication.networkId,
     nearAuthentication.accountId,
     nearAuthentication.keypair
   )
-
-  const connection = Connection.fromConfig({
-    networkId: nearAuthentication.networkId,
-    provider: {
-      type: 'JsonRpcProvider',
-      args: {
-        url: {
-          testnet: 'https://rpc.testnet.near.org',
-          mainnet: 'https://rpc.mainnet.near.org',
-        }[nearAuthentication.networkId],
-      },
-    },
-    signer: { type: 'InMemorySigner', keyStore },
-  })
-
-  const account = new Account(connection, nearAuthentication.accountId)
 
   const payload = Array.from(ethers.getBytes(transactionHash))
 
@@ -125,7 +135,7 @@ export const sign = async ({
     const signature = await multichainContractAcc.sign({
       args: { request: signArgs },
       gas: NEAR_MAX_GAS,
-      amount: new BN(1),
+      amount: nearAuthentication.deposit ?? new BN(1),
     })
 
     return toRVS(signature)
@@ -135,7 +145,7 @@ export const sign = async ({
       'sign',
       { request: signArgs },
       NEAR_MAX_GAS,
-      new BN(1)
+      nearAuthentication.deposit ?? new BN(1)
     )
 
     const signedDelegate = await account.signedDelegate({
@@ -197,22 +207,26 @@ export async function getRootPublicKey(
   contract: ChainSignatureContracts,
   nearNetworkId: string
 ): Promise<string | undefined> {
-  const nearConnection = Connection.fromConfig({
-    networkId: nearNetworkId,
-    provider: {
-      type: 'JsonRpcProvider',
-      args: {
-        url: {
-          testnet: 'https://rpc.testnet.near.org',
-          mainnet: 'https://rpc.mainnet.near.org',
-        }[nearNetworkId],
-      },
-    },
-    signer: { type: 'InMemorySigner', keyStore: new InMemoryKeyStore() },
-  })
-
-  const nearAccount = new Account(nearConnection, 'dontcare')
+  const nearAccount = await setConnection(
+    nearNetworkId,
+    'dontcare',
+    KeyPair.fromRandom('ed25519')
+  )
   const multichainContractAcc = getMultichainContract(nearAccount, contract)
 
   return await multichainContractAcc.public_key()
+}
+
+export async function getExperimentalSignatureDeposit(
+  contract: ChainSignatureContracts,
+  nearNetworkId: string
+): Promise<string | undefined> {
+  const nearAccount = await setConnection(
+    nearNetworkId,
+    'dontcare',
+    KeyPair.fromRandom('ed25519')
+  )
+  const multichainContractAcc = getMultichainContract(nearAccount, contract)
+
+  return await multichainContractAcc.experimental_signature_deposit()
 }
