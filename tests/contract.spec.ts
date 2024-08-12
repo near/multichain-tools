@@ -18,7 +18,10 @@ dotenv.config()
 describe('Chain Signature', () => {
   test('should generate a valid signature', async () => {
     const transactionHash = ethers.randomBytes(32)
-    const path = "m/44'/60'/0'/0/0"
+    const path = {
+      chain: 60 as const,
+      domain: "m/44'/60'/0'/0/0",
+    }
     const nearAuthentication: NearAuthentication = {
       accountId: process.env.NEXT_PUBLIC_NEAR_ACCOUNT_ID_TESTNET || '',
       deposit: new BN(5),
@@ -40,12 +43,12 @@ describe('Chain Signature', () => {
 
       expect(signature).toBeDefined()
 
-      const ethereumAddress = await fetchDerivedEVMAddress(
-        nearAuthentication.accountId,
+      const ethereumAddress = await fetchDerivedEVMAddress({
+        signerId: nearAuthentication.accountId,
         path,
-        nearAuthentication.networkId,
-        contract
-      )
+        nearNetworkId: nearAuthentication.networkId,
+        multichainContractId: contract,
+      })
 
       const recoveredAddress = ethers.recoverAddress(transactionHash, {
         r: `0x${signature.r}`,
@@ -81,7 +84,7 @@ describe('Chain Signature', () => {
       )
 
       expect(deposit).toBeDefined()
-      expect(typeof deposit).toBe('number')
+      expect(typeof deposit).toBe('string')
       console.log('Deposit:', deposit)
     } catch (error) {
       if (error instanceof Error) {
