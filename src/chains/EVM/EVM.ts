@@ -102,13 +102,13 @@ class EVM {
     const { from, ...rest } = transaction
 
     return {
-      ...rest,
       gasLimit,
       maxFeePerGas,
       maxPriorityFeePerGas,
       chainId: this.provider._network.chainId,
       nonce,
       type: 2,
+      ...rest,
     }
   }
 
@@ -146,12 +146,20 @@ class EVM {
     nearAuthentication: NearAuthentication,
     path: KeyDerivationPath
   ): Promise<ethers.TransactionResponse | undefined> {
-    const from = await fetchDerivedEVMAddress({
+    const derivedFrom = await fetchDerivedEVMAddress({
       signerId: nearAuthentication.accountId,
       path,
       nearNetworkId: nearAuthentication.networkId,
       multichainContractId: this.contract,
     })
+
+    if (data.from && data.from.toLowerCase() !== derivedFrom.toLowerCase()) {
+      throw new Error(
+        'Provided "from" address does not match the derived address'
+      )
+    }
+
+    const from = data.from || derivedFrom
 
     const transaction = await this.attachGasAndNonce({
       ...data,
