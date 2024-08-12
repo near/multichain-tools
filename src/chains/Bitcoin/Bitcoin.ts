@@ -1,7 +1,6 @@
 import axios from 'axios'
 import * as bitcoin from 'bitcoinjs-lib'
 
-
 import { sign } from '../../signature'
 import {
   fetchBTCFeeProperties,
@@ -11,7 +10,12 @@ import {
 } from './utils'
 import { type ChainSignatureContracts, type NearAuthentication } from '../types'
 import { type KeyDerivationPath } from '../../kdf/types'
-import { BTCNetworkIds, BTCTransaction, UTXO, BTCOutput } from './types'
+import {
+  type BTCNetworkIds,
+  type BTCTransaction,
+  type UTXO,
+  type BTCOutput,
+} from './types'
 
 interface Transaction {
   txid: string

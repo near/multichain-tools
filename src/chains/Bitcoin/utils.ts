@@ -7,7 +7,11 @@ import * as bitcoin from 'bitcoinjs-lib'
 // @ts-ignore
 import coinselect from 'coinselect'
 
-import { BTCOutput, type BitcoinPublicKeyAndAddressRequest, type UTXO } from './types'
+import {
+  type BTCOutput,
+  type BitcoinPublicKeyAndAddressRequest,
+  type UTXO,
+} from './types'
 import { getCanonicalizedDerivationPath } from '../../kdf/utils'
 import { generateBTCAddress } from '../../kdf/kdf'
 import { getRootPublicKey } from '../../signature'
