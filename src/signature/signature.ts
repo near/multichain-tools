@@ -129,13 +129,25 @@ export const sign = async ({
     key_version: 0,
   }
 
+  const deposit =
+    nearAuthentication.deposit ??
+    BN.max(
+      new BN(1),
+      new BN(
+        (await getExperimentalSignatureDeposit(
+          contract,
+          nearAuthentication.networkId
+        )) || '1'
+      )
+    )
+
   if (!relayerUrl) {
     const multichainContractAcc = getMultichainContract(account, contract)
 
     const signature = await multichainContractAcc.sign({
       args: { request: signArgs },
       gas: NEAR_MAX_GAS,
-      amount: nearAuthentication.deposit ?? new BN(1),
+      amount: deposit,
     })
 
     return toRVS(signature)
@@ -145,7 +157,7 @@ export const sign = async ({
       'sign',
       { request: signArgs },
       NEAR_MAX_GAS,
-      nearAuthentication.deposit ?? new BN(1)
+      deposit
     )
 
     const signedDelegate = await account.signedDelegate({
