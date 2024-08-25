@@ -25,12 +25,14 @@ export const signAndSendEVMTransaction = async (
         success: true,
       }
     } else {
+      console.error(res)
       return {
         success: false,
         errorMessage: 'Transaction failed',
       }
     }
   } catch (e: unknown) {
+    console.error(e)
     return {
       success: false,
       errorMessage: e instanceof Error ? e.message : String(e),
