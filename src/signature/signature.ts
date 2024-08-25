@@ -47,7 +47,7 @@ type MultiChainContract = Contract & {
     gas: BN
     amount: BN
   }) => Promise<MPCSignature>
-  experimental_signature_deposit: () => Promise<string>
+  experimantal_signature_deposit: () => Promise<string>
 }
 
 const getMultichainContract = (
@@ -55,7 +55,7 @@ const getMultichainContract = (
   contract: ChainSignatureContracts
 ): MultiChainContract => {
   return new Contract(account, contract, {
-    viewMethods: ['public_key', 'experimental_signature_deposit'],
+    viewMethods: ['public_key', 'experimantal_signature_deposit'],
     changeMethods: ['sign'],
     useLocalViewExecution: false,
   }) as MultiChainContract
@@ -240,5 +240,5 @@ export async function getExperimentalSignatureDeposit(
   )
   const multichainContractAcc = getMultichainContract(nearAccount, contract)
 
-  return await multichainContractAcc.experimental_signature_deposit()
+  return await multichainContractAcc.experimantal_signature_deposit()
 }
