@@ -1,104 +1,20 @@
+/* eslint-disable @typescript-eslint/prefer-ts-expect-error */
 import axios from 'axios'
 import * as bitcoin from 'bitcoinjs-lib'
 
 // There is no types for coinselect
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-expect-error
+// @ts-ignore
 import coinselect from 'coinselect'
-import { type BigNumberish, ethers } from 'ethers'
 
-import { type BTCOutput, type UTXO } from '../chains/Bitcoin/types'
-import { type EVMChainConfigWithProviders } from '../chains/EVM/types'
 import {
-  type BTCNetworkIds,
-  type ChainSignatureContracts,
-  type NearNetworkIds,
-} from '../chains/types'
-import { generateBTCAddress, generateEthereumAddress } from '../kdf/kdf'
-import { getRootPublicKey } from '../signature'
-
-/**
- * Estimates the amount of gas that a transaction will consume.
- *
- * This function calls the underlying JSON RPC's `estimateGas` method to
- * predict how much gas the transaction will use. This is useful for setting
- * gas limits when sending a transaction to ensure it does not run out of gas.
- *
- * @param {string} providerUrl - The providerUrl of the EVM network to query the fee properties from.
- * @param {ethers.TransactionLike} transaction - The transaction object for which to estimate gas. This function only requires the `to`, `value`, and `data` fields of the transaction object.
- * @returns {Promise<bigint>} A promise that resolves to the estimated gas amount as a bigint.
- */
-export async function fetchEVMFeeProperties(
-  providerUrl: string,
-  transaction: ethers.TransactionLike
-): Promise<{
-  gasLimit: bigint
-  maxFeePerGas: bigint
-  maxPriorityFeePerGas: bigint
-  maxFee: bigint
-}> {
-  const provider = new ethers.JsonRpcProvider(providerUrl)
-  const gasLimit = await provider.estimateGas(transaction)
-  const feeData = await provider.getFeeData()
-
-  const maxFeePerGas = feeData.maxFeePerGas ?? ethers.parseUnits('10', 'gwei')
-  const maxPriorityFeePerGas =
-    feeData.maxPriorityFeePerGas ?? ethers.parseUnits('10', 'gwei')
-
-  return {
-    gasLimit,
-    maxFeePerGas,
-    maxPriorityFeePerGas,
-    maxFee: maxFeePerGas * gasLimit,
-  }
-}
-
-/**
- * Calculates the estimated maximum fee for an EVM transaction.
- *
- * @param {Object} transaction - The transaction details including the recipient's address, value, and data.
- * @param {EVMChainConfigWithProviders} chainConfig - The configuration object for the EVM chain, including provider URLs and other relevant settings.
- * @returns {Promise<bigint>} The estimated maximum transaction fee in wei.
- */
-export const fetchEstimatedEVMFee = async (
-  transaction: {
-    to: string
-    value?: BigNumberish
-    data?: string
-  },
-  chainConfig: EVMChainConfigWithProviders
-): Promise<bigint> =>
-  (await fetchEVMFeeProperties(chainConfig.providerUrl, transaction)).maxFee
-
-/**
- * Derives an Ethereum address for a given signer ID and derivation path.
- *
- * This method leverages the root public key associated with the signer ID to generate an Ethereum address
- * and public key based on the specified derivation path.
- *
- * @param {string} signerId - The identifier of the signer.
- * @param {string} path - The derivation path used for generating the address.
- * @param {string} nearNetworkId - The near network id used to interact with the NEAR blockchain.
- * @param {ChainSignatureContracts} multichainContractId - The contract identifier used to get the root public key.
- * @returns {Promise<string>} A promise that resolves to the derived Ethereum address.
- */
-export async function fetchDerivedEVMAddress(
-  signerId: string,
-  path: string,
-  nearNetworkId: NearNetworkIds,
-  multichainContractId: ChainSignatureContracts
-): Promise<string> {
-  const contractRootPublicKey = await getRootPublicKey(
-    multichainContractId,
-    nearNetworkId
-  )
-
-  if (!contractRootPublicKey) {
-    throw new Error('Failed to fetch root public key')
-  }
-
-  return await generateEthereumAddress(signerId, path, contractRootPublicKey)
-}
+  type BTCOutput,
+  type BitcoinPublicKeyAndAddressRequest,
+  type UTXO,
+} from './types'
+import { getCanonicalizedDerivationPath } from '../../kdf/utils'
+import { generateBTCAddress } from '../../kdf/kdf'
+import { getRootPublicKey } from '../../signature'
 
 /**
  * Fetches the current fee rate from the Bitcoin network.
@@ -201,14 +117,20 @@ export async function fetchBTCFeeProperties(
  * @param {ChainSignatureContracts} contract - The mpc contract's accountId on the NEAR blockchain.
  * @returns {Promise<{ address: string; publicKey: Buffer }>} An object containing the derived Bitcoin address and its corresponding public key buffer.
  */
-export async function fetchDerivedBTCAddressAndPublicKey(
-  signerId: string,
-  path: string,
-  network: bitcoin.networks.Network,
-  nearNetworkId: NearNetworkIds,
-  contract: ChainSignatureContracts
-): Promise<{ address: string; publicKey: Buffer }> {
-  const contractRootPublicKey = await getRootPublicKey(contract, nearNetworkId)
+export async function fetchDerivedBTCAddressAndPublicKey({
+  signerId,
+  path,
+  btcNetworkId,
+  nearNetworkId,
+  multichainContractId,
+}: BitcoinPublicKeyAndAddressRequest): Promise<{
+  address: string
+  publicKey: Buffer
+}> {
+  const contractRootPublicKey = await getRootPublicKey(
+    multichainContractId,
+    nearNetworkId
+  )
 
   if (!contractRootPublicKey) {
     throw new Error('Failed to fetch root public key')
@@ -216,7 +138,7 @@ export async function fetchDerivedBTCAddressAndPublicKey(
 
   const derivedKey = await generateBTCAddress(
     signerId,
-    path,
+    getCanonicalizedDerivationPath(path),
     contractRootPublicKey
   )
 
@@ -224,7 +146,7 @@ export async function fetchDerivedBTCAddressAndPublicKey(
 
   const { address } = bitcoin.payments.p2pkh({
     pubkey: publicKeyBuffer,
-    network,
+    network: parseBTCNetwork(btcNetworkId),
   })
 
   if (!address) {
@@ -234,30 +156,15 @@ export async function fetchDerivedBTCAddressAndPublicKey(
   return { address, publicKey: publicKeyBuffer }
 }
 
-/**
- * Derives a Bitcoin address and its corresponding public key for a given signer ID and derivation path.
- * This method utilizes the root public key associated with the signer ID to generate a Bitcoin address
- * and public key buffer based on the specified derivation path and network.
- *
- * @param {string} signerId - The unique identifier of the signer.
- * @param {string} path - The derivation path used to generate the address.
- * @param {bitcoin.networks.Network} network - The Bitcoin network (e.g., mainnet, testnet).
- * @param {string} nearNetworkId - The network id used to interact with the NEAR blockchain.
- * @param {ChainSignatureContracts} contract - The mpc contract's accountId on the NEAR blockchain.
- * @returns {Promise<string>} the derived Bitcoin address.
- */
-export async function fetchDerivedBTCAddress(
-  signerId: string,
-  path: string,
-  network: BTCNetworkIds,
-  nearNetworkId: NearNetworkIds,
-  contract: ChainSignatureContracts
-): Promise<string> {
-  return await fetchDerivedBTCAddressAndPublicKey(
-    signerId,
-    path,
-    network === 'testnet' ? bitcoin.networks.testnet : bitcoin.networks.bitcoin,
-    nearNetworkId,
-    contract
-  ).then(({ address }) => address)
+export function parseBTCNetwork(network: string): bitcoin.networks.Network {
+  switch (network.toLowerCase()) {
+    case 'mainnet':
+      return bitcoin.networks.bitcoin
+    case 'testnet':
+      return bitcoin.networks.testnet
+    case 'regtest':
+      return bitcoin.networks.regtest
+    default:
+      throw new Error(`Unknown Bitcoin network: ${network}`)
+  }
 }

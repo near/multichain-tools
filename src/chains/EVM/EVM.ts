@@ -1,13 +1,10 @@
 import { ethers, keccak256 } from 'ethers'
 
-import { type EVMTransaction } from './types'
 import { sign } from '../../signature'
-import { fetchDerivedEVMAddress, fetchEVMFeeProperties } from '../../utils'
-import {
-  type ChainSignatureContracts,
-  type NearAuthentication,
-  type NearNetworkIds,
-} from '../types'
+import { fetchDerivedEVMAddress, fetchEVMFeeProperties } from './utils'
+import { type ChainSignatureContracts, type NearAuthentication } from '../types'
+import { type EVMTransaction } from './types'
+import { type KeyDerivationPath } from '../../kdf/types'
 
 class EVM {
   private readonly provider: ethers.JsonRpcProvider
@@ -74,28 +71,6 @@ class EVM {
   }
 
   /**
-   * Estimates the amount of gas that a transaction will consume.
-   *
-   * This function calls the underlying JSON RPC's `estimateGas` method to
-   * predict how much gas the transaction will use. This is useful for setting
-   * gas limits when sending a transaction to ensure it does not run out of gas.
-   *
-   * @param {ethers.TransactionLike} transaction - The transaction object for which to estimate gas. This function only requires the `to`, `value`, and `data` fields of the transaction object.
-   * @returns {Promise<bigint>} A promise that resolves to the estimated gas amount as a bigint.
-   */
-  async getFeeProperties(transaction: ethers.TransactionLike): Promise<{
-    gasLimit: bigint
-    maxFeePerGas: bigint
-    maxPriorityFeePerGas: bigint
-    maxFee: bigint
-  }> {
-    return await fetchEVMFeeProperties(
-      this.provider._getConnection().url,
-      transaction
-    )
-  }
-
-  /**
    * Enhances a transaction with current gas price, estimated gas limit, chain ID, and nonce.
    *
    * This method fetches the current gas price, estimates the gas limit required for the transaction, and retrieves the nonce for the transaction sender's address.
@@ -105,7 +80,7 @@ class EVM {
    * @returns {Promise<ethers.providers.TransactionRequest>} A new transaction object augmented with gas price, gas limit, chain ID, and nonce.
    */
   async attachGasAndNonce(
-    transaction: EVMTransaction & { from: string }
+    transaction: Omit<EVMTransaction, 'from'> & { from: string }
   ): Promise<ethers.TransactionLike> {
     const hasUserProvidedGas =
       transaction.gasLimit &&
@@ -114,7 +89,10 @@ class EVM {
 
     const { gasLimit, maxFeePerGas, maxPriorityFeePerGas } = hasUserProvidedGas
       ? transaction
-      : await this.getFeeProperties(transaction)
+      : await fetchEVMFeeProperties(
+          this.provider._getConnection().url,
+          transaction
+        )
 
     const nonce = await this.provider.getTransactionCount(
       transaction.from,
@@ -124,13 +102,13 @@ class EVM {
     const { from, ...rest } = transaction
 
     return {
-      ...rest,
       gasLimit,
       maxFeePerGas,
       maxPriorityFeePerGas,
       chainId: this.provider._network.chainId,
       nonce,
       type: 2,
+      ...rest,
     }
   }
 
@@ -154,31 +132,6 @@ class EVM {
   }
 
   /**
-   * Derives an Ethereum address for a given signer ID and derivation path.
-   *
-   * This method leverages the root public key associated with the signer ID to generate an Ethereum address
-   * and public key based on the specified derivation path.
-   *
-   * @param {string} signerId - The identifier of the signer.
-   * @param {string} path - The derivation path used for generating the address.
-   * @param {string} nearNetworkId - The near network id used to interact with the NEAR blockchain.
-   * @param {ChainSignatureContracts} multichainContractId - The contract identifier used to get the root public key.
-   * @returns {Promise<string>} A promise that resolves to the derived Ethereum address.
-   */
-  async deriveAddress(
-    signerId: string,
-    path: string,
-    nearNetworkId: NearNetworkIds
-  ): Promise<string> {
-    return await fetchDerivedEVMAddress(
-      signerId,
-      path,
-      nearNetworkId,
-      this.contract
-    )
-  }
-
-  /**
    * Manages the lifecycle of an EVM transaction, encompassing preparation, signing, and broadcasting. This method calculates gas and nonce, digitally signs the transaction using on-chain mechanisms, and broadcasts it for execution.
    *
    * The digital signing process is detailed in @signature.ts, involving the signing of a transaction hash with the derivation path.
@@ -191,13 +144,22 @@ class EVM {
   async handleTransaction(
     data: EVMTransaction,
     nearAuthentication: NearAuthentication,
-    path: string
+    path: KeyDerivationPath
   ): Promise<ethers.TransactionResponse | undefined> {
-    const from = await this.deriveAddress(
-      nearAuthentication.accountId,
+    const derivedFrom = await fetchDerivedEVMAddress({
+      signerId: nearAuthentication.accountId,
       path,
-      nearAuthentication.networkId
-    )
+      nearNetworkId: nearAuthentication.networkId,
+      multichainContractId: this.contract,
+    })
+
+    if (data.from && data.from.toLowerCase() !== derivedFrom.toLowerCase()) {
+      throw new Error(
+        'Provided "from" address does not match the derived address'
+      )
+    }
+
+    const from = data.from || derivedFrom
 
     const transaction = await this.attachGasAndNonce({
       ...data,

@@ -1,12 +1,14 @@
 {
   "name": "multichain-tools",
-  "version": "2.0.12",
+  "version": "2.0.14-beta.10",
   "description": "",
   "main": "index.js",
   "typings": "index.d.ts",
   "scripts": {
     "build": "tsc --project tsconfig.json",
-    "deploy": "npm run build && cp package.json README.md dist/ && cd dist && npm publish",
+    "pre:deploy": "npm run build && cp package.json README.md dist/",
+    "deploy": "npm run pre:deploy && cd dist && npm publish",
+    "deploy:beta": "npm run pre:deploy && cd dist && npm publish --tag beta",
     "test": "jest"
   },
   "author": "",
@@ -17,6 +19,7 @@
     "@babel/preset-typescript": "^7.24.7",
     "@types/bn.js": "^5.1.5",
     "@types/elliptic": "^6.4.18",
+    "@types/lodash.pickby": "^4.6.9",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "babel-jest": "^29.7.0",
     "dotenv": "^16.4.5",
@@ -36,9 +39,11 @@
     "axios": "^1.6.8",
     "bitcoinjs-lib": "^6.1.5",
     "bn.js": "^5.2.1",
+    "canonicalize": "^2.0.0",
     "coinselect": "^3.1.13",
     "elliptic": "^6.5.5",
     "ethers": "^6.11.1",
+    "lodash.pickby": "^4.6.0",
     "js-sha3": "^0.9.3",
     "near-api-js": "^3.0.4"
   }

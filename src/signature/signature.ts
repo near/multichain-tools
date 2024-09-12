@@ -11,6 +11,8 @@ import {
 } from '../chains/types'
 import { parseSignedDelegateForRelayer } from '../relayer'
 import { type ExecutionOutcomeWithId } from 'near-api-js/lib/providers'
+import { type KeyDerivationPath } from '../kdf/types'
+import { getCanonicalizedDerivationPath } from '../kdf/utils'
 import { KeyPair } from 'near-api-js'
 
 const NEAR_MAX_GAS = new BN('300000000000000')
@@ -45,7 +47,7 @@ type MultiChainContract = Contract & {
     gas: BN
     amount: BN
   }) => Promise<MPCSignature>
-  experimental_signature_deposit: () => Promise<string>
+  experimantal_signature_deposit: () => Promise<number>
 }
 
 const getMultichainContract = (
@@ -53,7 +55,7 @@ const getMultichainContract = (
   contract: ChainSignatureContracts
 ): MultiChainContract => {
   return new Contract(account, contract, {
-    viewMethods: ['public_key', 'experimental_signature_deposit'],
+    viewMethods: ['public_key', 'experimantal_signature_deposit'],
     changeMethods: ['sign'],
     useLocalViewExecution: false,
   }) as MultiChainContract
@@ -86,7 +88,7 @@ const setConnection = async (
 
 interface SignParams {
   transactionHash: string | ethers.BytesLike
-  path: string
+  path: KeyDerivationPath
   nearAuthentication: NearAuthentication
   contract: ChainSignatureContracts
   relayerUrl?: string
@@ -123,9 +125,21 @@ export const sign = async ({
 
   const signArgs = {
     payload,
-    path,
+    path: getCanonicalizedDerivationPath(path),
     key_version: 0,
   }
+
+  const deposit =
+    nearAuthentication.deposit ??
+    BN.max(
+      new BN(1),
+      new BN(
+        (await getExperimentalSignatureDeposit(
+          contract,
+          nearAuthentication.networkId
+        )) || '1'
+      )
+    )
 
   if (!relayerUrl) {
     const multichainContractAcc = getMultichainContract(account, contract)
@@ -133,43 +147,40 @@ export const sign = async ({
     const signature = await multichainContractAcc.sign({
       args: { request: signArgs },
       gas: NEAR_MAX_GAS,
-      amount: nearAuthentication.deposit ?? new BN(1),
+      amount: deposit,
     })
 
     return toRVS(signature)
   }
+  try {
+    const functionCall = actionCreators.functionCall(
+      'sign',
+      { request: signArgs },
+      NEAR_MAX_GAS,
+      deposit
+    )
 
-  const functionCall = actionCreators.functionCall(
-    'sign',
-    { request: signArgs },
-    NEAR_MAX_GAS,
-    nearAuthentication.deposit ?? new BN(1)
-  )
+    const signedDelegate = await account.signedDelegate({
+      receiverId: contract,
+      actions: [functionCall],
+      blockHeightTtl: 60,
+    })
+    // Remove the cached access key to prevent nonce reuse
+    delete account.accessKeyByPublicKeyCache[
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+      signedDelegate.delegateAction.publicKey.toString()
+    ]
 
-  const signedDelegate = await account.signedDelegate({
-    receiverId: contract,
-    actions: [functionCall],
-    blockHeightTtl: 60,
-  })
+    // TODO: add support for creating the signed delegate using the mpc recovery service with an oidc_token
 
-  // TODO: add support for creating the signed delegate using the mpc recovery service with an oidc_token
+    const res = await fetch(`${relayerUrl}/send_meta_tx_async`, {
+      method: 'POST',
+      mode: 'cors',
+      body: JSON.stringify(parseSignedDelegateForRelayer(signedDelegate)),
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+    })
 
-  const res = await fetch(`${relayerUrl}/send_meta_tx_async`, {
-    method: 'POST',
-    mode: 'cors',
-    body: JSON.stringify(parseSignedDelegateForRelayer(signedDelegate)),
-    headers: new Headers({ 'Content-Type': 'application/json' }),
-  })
-
-  const txHash = await res.text()
-
-  // TODO: check if we really need to retry here
-  let attempts = 0
-  const getSignature = async (): Promise<RSVSignature> => {
-    if (attempts >= 3) {
-      throw new Error('Signature error, please retry')
-    }
-
+    const txHash = await res.text()
     const txStatus = await account.connection.provider.txStatus(
       txHash,
       account.accountId
@@ -192,18 +203,16 @@ export const sign = async ({
       ''
     )
     if (signature) {
-      const parsedJSONSignature = JSON.parse(signature) as { Ok: MPCSignature }
+      const parsedJSONSignature = JSON.parse(signature) as {
+        Ok: MPCSignature
+      }
       return toRVS(parsedJSONSignature.Ok)
     }
-
-    await new Promise((resolve) => {
-      setTimeout(resolve, 10000)
-    })
-    attempts += 1
-    return await getSignature()
+  } catch (e) {
+    console.error(e)
   }
 
-  return await getSignature()
+  throw new Error('Signature error, please retry')
 }
 
 export async function getRootPublicKey(
@@ -231,5 +240,7 @@ export async function getExperimentalSignatureDeposit(
   )
   const multichainContractAcc = getMultichainContract(nearAccount, contract)
 
-  return await multichainContractAcc.experimental_signature_deposit()
+  return (
+    await multichainContractAcc.experimantal_signature_deposit()
+  ).toLocaleString('fullwide', { useGrouping: false })
 }
