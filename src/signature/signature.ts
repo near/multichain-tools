@@ -233,7 +233,6 @@ export async function getExperimentalSignatureDeposit(
   contract: ChainSignatureContracts,
   nearNetworkId: string
 ): Promise<string | undefined> {
-  console.log('called here')
   const nearAccount = await setConnection(
     nearNetworkId,
     'dontcare',
