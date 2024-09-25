@@ -1,8 +1,9 @@
 import { type MPCSignature, type RSVSignature } from './types'
 import BN from 'bn.js'
 
-import { Account, Connection, KeyPair } from 'near-api-js'
-import { InMemoryKeyStore } from 'near-api-js/lib/key_stores'
+import { Account, Connection } from '@near-js/accounts'
+import { InMemoryKeyStore } from '@near-js/keystores'
+import { KeyPair } from 'near-api-js'
 
 export const NEAR_MAX_GAS = new BN('300000000000000')
 
