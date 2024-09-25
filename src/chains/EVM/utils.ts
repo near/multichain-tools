@@ -1,7 +1,7 @@
 import { ethers } from 'ethers'
 
 import { generateEthereumAddress } from '../../kdf/kdf'
-import { getRootPublicKey } from '../../signature'
+import { ChainSignaturesContract } from '../../signature'
 import { getCanonicalizedDerivationPath } from '../../kdf/utils'
 import { type FetchEVMAddressRequest } from './types'
 
@@ -59,7 +59,7 @@ export async function fetchDerivedEVMAddress({
   nearNetworkId,
   multichainContractId,
 }: FetchEVMAddressRequest): Promise<string> {
-  const contractRootPublicKey = await getRootPublicKey(
+  const contractRootPublicKey = await ChainSignaturesContract.getRootPublicKey(
     multichainContractId,
     nearNetworkId
   )

@@ -14,7 +14,7 @@ import {
 } from './types'
 import { getCanonicalizedDerivationPath } from '../../kdf/utils'
 import { generateBTCAddress } from '../../kdf/kdf'
-import { getRootPublicKey } from '../../signature'
+import { ChainSignaturesContract } from '../../signature'
 
 /**
  * Fetches the current fee rate from the Bitcoin network.
@@ -127,7 +127,7 @@ export async function fetchDerivedBTCAddressAndPublicKey({
   address: string
   publicKey: Buffer
 }> {
-  const contractRootPublicKey = await getRootPublicKey(
+  const contractRootPublicKey = await ChainSignaturesContract.getRootPublicKey(
     multichainContractId,
     nearNetworkId
   )

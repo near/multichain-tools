@@ -1,7 +1,7 @@
 import axios from 'axios'
 import * as bitcoin from 'bitcoinjs-lib'
 
-import { sign } from '../../signature'
+import { ChainSignaturesContract } from '../../signature'
 import {
   fetchBTCFeeProperties,
   fetchBTCUTXOs,
@@ -294,7 +294,7 @@ export class Bitcoin {
     const mpcKeyPair = {
       publicKey,
       sign: async (transactionHash: Buffer): Promise<Buffer> => {
-        const signature = await sign({
+        const signature = await ChainSignaturesContract.sign({
           transactionHash,
           path,
           nearAuthentication,
