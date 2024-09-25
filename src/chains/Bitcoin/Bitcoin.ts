@@ -77,10 +77,10 @@ export class Bitcoin {
   /**
    * Fetches a Bitcoin transaction by its ID and constructs a transaction object.
    * This function retrieves the transaction details from the blockchain using the RPC endpoint,
-   * then parses the input and output data to construct a `bitcoin.Transaction` object.
+   * then parses the input and output data to construct a bitcoin.Transaction object.
    *
    * @param {string} transactionId - The ID of the transaction to fetch.
-   * @returns {Promise<bitcoin.Transaction>} A promise that resolves to a `bitcoin.Transaction` object representing the fetched transaction.
+   * @returns {Promise<bitcoin.Transaction>} A promise that resolves to a bitcoin.Transaction object representing the fetched transaction.
    */
   async fetchTransaction(transactionId: string): Promise<bitcoin.Transaction> {
     const { data } = await axios.get<Transaction>(
@@ -168,8 +168,9 @@ export class Bitcoin {
         return response.data
       }
       throw new Error(`Failed to broadcast transaction: ${response.data}`)
-    } catch (error) {
-      throw new Error(`Error broadcasting transaction: ${error as string}`)
+    } catch (error: unknown) {
+      console.log(error)
+      throw new Error(`Error broadcasting transaction`)
     }
   }
 
@@ -184,6 +185,7 @@ export class Bitcoin {
    * @param {string} data.value - The amount of Bitcoin to send (in BTC).
    * @param {NearAuthentication} nearAuthentication - The object containing the user's authentication information.
    * @param {string} path - The key derivation path for the account.
+   * @returns {Promise<string>} A promise that resolves to the transaction ID once the transaction is successfully broadcast.
    */
   async handleTransaction(
     data: BTCTransaction,
@@ -204,7 +206,7 @@ export class Bitcoin {
         : await fetchBTCFeeProperties(this.providerUrl, address, [
             {
               address: data.to,
-              value: parseFloat(data.value),
+              value: Bitcoin.toSatoshi(parseFloat(data.value)),
             },
           ])
 
@@ -212,24 +214,66 @@ export class Bitcoin {
       network: parseBTCNetwork(this.network),
     })
 
+    const network = parseBTCNetwork(this.network)
+
     await Promise.all(
       inputs.map(async (utxo: UTXO) => {
         const transaction = await this.fetchTransaction(utxo.txid)
+        const prevOut = transaction.outs[utxo.vout]
+        const script = prevOut.script
+        const value = utxo.value
+
         let inputOptions
-        if (transaction.outs[utxo.vout].script.includes('0014')) {
+
+        // Detect the script type
+        const payment = bitcoin.payments.p2wpkh({ output: script, network })
+        if (payment.address) {
+          // P2WPKH
           inputOptions = {
             hash: utxo.txid,
             index: utxo.vout,
             witnessUtxo: {
-              script: transaction.outs[utxo.vout].script,
-              value: utxo.value,
+              script: prevOut.script,
+              value,
             },
           }
         } else {
-          inputOptions = {
-            hash: utxo.txid,
-            index: utxo.vout,
-            nonWitnessUtxo: Buffer.from(transaction.toHex(), 'hex'),
+          const p2sh = bitcoin.payments.p2sh({ output: script, network })
+          if (p2sh.address && p2sh.redeem?.output) {
+            // P2SH-P2WPKH
+            const redeemPayment = bitcoin.payments.p2wpkh({
+              output: p2sh.redeem.output,
+              network,
+            })
+            if (redeemPayment.address && redeemPayment.output) {
+              inputOptions = {
+                hash: utxo.txid,
+                index: utxo.vout,
+                witnessUtxo: {
+                  script: redeemPayment.output,
+                  value,
+                },
+                redeemScript: p2sh.redeem.output,
+              }
+            } else {
+              throw new Error(
+                `Unsupported P2SH script for UTXO ${utxo.txid}:${utxo.vout}`
+              )
+            }
+          } else {
+            const p2pkh = bitcoin.payments.p2pkh({ output: script, network })
+            if (p2pkh.address) {
+              // P2PKH
+              inputOptions = {
+                hash: utxo.txid,
+                index: utxo.vout,
+                nonWitnessUtxo: Buffer.from(transaction.toHex(), 'hex'),
+              }
+            } else {
+              throw new Error(
+                `Unsupported script type for UTXO ${utxo.txid}:${utxo.vout}`
+              )
+            }
           }
         }
 
@@ -253,9 +297,9 @@ export class Bitcoin {
 
     const mpcKeyPair = {
       publicKey,
-      sign: async (transactionHash: Buffer): Promise<Buffer> => {
+      sign: async (hash: Buffer): Promise<Buffer> => {
         const signature = await ChainSignaturesContract.sign({
-          transactionHash,
+          transactionHash: hash,
           path,
           nearAuthentication,
           contract: this.contract,
@@ -266,14 +310,12 @@ export class Bitcoin {
           throw new Error('Failed to sign transaction')
         }
 
-        return Buffer.from(Bitcoin.joinSignature(signature))
+        return Bitcoin.joinSignature(signature)
       },
     }
 
-    // TODO: it should be done in parallel,
-    // but for now it's causing nonce issues on the signDelegate so we will run sequentially to avoid the issue for now
+    // Sign inputs sequentially to avoid potential issues
     for (let index = 0; index < inputs.length; index += 1) {
-      // eslint-disable-next-line no-await-in-loop
       await psbt.signInputAsync(index, mpcKeyPair)
     }
 
@@ -285,6 +327,6 @@ export class Bitcoin {
     if (txid) {
       return txid
     }
-    return 'Error'
+    throw new Error('Failed to broadcast transaction')
   }
 }

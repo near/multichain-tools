@@ -1,10 +1,9 @@
-/* eslint-disable @typescript-eslint/prefer-ts-expect-error */
 import axios from 'axios'
 import * as bitcoin from 'bitcoinjs-lib'
 
 // There is no types for coinselect
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
+// @ts-expect-error
 import coinselect from 'coinselect'
 
 import {
@@ -13,7 +12,7 @@ import {
   type UTXO,
 } from './types'
 import { getCanonicalizedDerivationPath } from '../../kdf/utils'
-import { generateBTCAddress } from '../../kdf/kdf'
+import { generateBTCCompressedPublicKey } from '../../kdf/kdf'
 import { ChainSignaturesContract } from '../../signature'
 
 /**
@@ -44,8 +43,8 @@ export async function fetchBTCFeeRate(
  *
  * @param {string} address - The Bitcoin address for which to fetch the UTXOs.
  * @returns {Promise<UTXO[]>} A promise that resolves to an array of UTXOs.
- * Each UTXO is represented as an object containing the transaction ID (`txid`), the output index within that transaction (`vout`),
- * the value of the output in satoshis (`value`) and the locking script (`script`).
+ * Each UTXO is represented as an object containing the transaction ID (txid), the output index within that transaction (vout),
+ * the value of the output in satoshis (value) and the locking script (script).
  */
 export async function fetchBTCUTXOs(
   providerUrl: string,
@@ -71,7 +70,7 @@ export async function fetchBTCUTXOs(
 /**
  * Calculates the fee properties for a Bitcoin transaction.
  * This function fetches the Unspent Transaction Outputs (UTXOs) for the given address,
- * and the fee rate for the specified confirmation target. It then uses the `coinselect` algorithm
+ * and the fee rate for the specified confirmation target. It then uses the coinselect algorithm
  * to select the UTXOs to be spent and calculates the fee required for the transaction.
  *
  * @param {string} providerUrl - The Bitcoin provider url to request the fee properties from
@@ -136,7 +135,7 @@ export async function fetchDerivedBTCAddressAndPublicKey({
     throw new Error('Failed to fetch root public key')
   }
 
-  const derivedKey = await generateBTCAddress(
+  const derivedKey = await generateBTCCompressedPublicKey(
     signerId,
     getCanonicalizedDerivationPath(path),
     contractRootPublicKey
@@ -144,10 +143,15 @@ export async function fetchDerivedBTCAddressAndPublicKey({
 
   const publicKeyBuffer = Buffer.from(derivedKey, 'hex')
 
-  const { address } = bitcoin.payments.p2pkh({
+  const network = parseBTCNetwork(btcNetworkId)
+
+  // Use P2WPKH (Bech32) address type
+  const payment = bitcoin.payments.p2wpkh({
     pubkey: publicKeyBuffer,
-    network: parseBTCNetwork(btcNetworkId),
+    network,
   })
+
+  const { address } = payment
 
   if (!address) {
     throw new Error('Failed to generate Bitcoin address')
