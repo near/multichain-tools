@@ -2,8 +2,7 @@
   "name": "multichain-tools",
   "version": "2.0.18",
   "description": "",
-  "main": "index.js",
-  "typings": "index.d.ts",
+  "main": "./src/index.ts",
   "scripts": {
     "build": "tsc --project tsconfig.json",
     "pre:deploy": "npm run build && cp package.json README.md dist/",
@@ -36,15 +35,20 @@
     "typescript": "^5.4.3"
   },
   "dependencies": {
+    "@cosmjs/crypto": "^0.32.4",
+    "@cosmjs/encoding": "^0.32.4",
+    "@cosmjs/proto-signing": "^0.32.4",
+    "@cosmjs/stargate": "^0.32.4",
     "axios": "^1.6.8",
     "bitcoinjs-lib": "^6.1.5",
     "bn.js": "^5.2.1",
     "canonicalize": "^2.0.0",
     "coinselect": "^3.1.13",
+    "cosmjs-types": "^0.9.0",
     "elliptic": "^6.5.5",
     "ethers": "^6.11.1",
-    "lodash.pickby": "^4.6.0",
     "js-sha3": "^0.9.3",
+    "lodash.pickby": "^4.6.0",
     "near-api-js": "^3.0.4"
   }
 }

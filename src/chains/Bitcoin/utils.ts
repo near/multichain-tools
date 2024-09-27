@@ -12,7 +12,7 @@ import {
   type UTXO,
 } from './types'
 import { getCanonicalizedDerivationPath } from '../../kdf/utils'
-import { generateBTCCompressedPublicKey } from '../../kdf/kdf'
+import { generateCompressedPublicKey } from '../../kdf/kdf'
 import { ChainSignaturesContract } from '../../signature'
 
 /**
@@ -135,7 +135,7 @@ export async function fetchDerivedBTCAddressAndPublicKey({
     throw new Error('Failed to fetch root public key')
   }
 
-  const derivedKey = await generateBTCCompressedPublicKey(
+  const derivedKey = await generateCompressedPublicKey(
     signerId,
     getCanonicalizedDerivationPath(path),
     contractRootPublicKey

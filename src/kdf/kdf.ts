@@ -1,9 +1,8 @@
 import { ec as EC } from 'elliptic'
-import { ethers } from 'ethers'
 import { sha3_256 } from 'js-sha3'
 import { base_decode } from 'near-api-js/lib/utils/serialize'
 
-function najPublicKeyStrToUncompressedHexPoint(
+export function najPublicKeyStrToUncompressedHexPoint(
   najPublicKeyStr: string
 ): string {
   return `04${Buffer.from(base_decode(najPublicKeyStr.split(':')[1])).toString('hex')}`
@@ -44,26 +43,7 @@ export async function deriveChildPublicKey(
   }`
 }
 
-export const generateEthereumAddress = async (
-  signerId: string,
-  path: string,
-  publicKey: string
-): Promise<string> => {
-  const uncompressedHexPoint = najPublicKeyStrToUncompressedHexPoint(publicKey)
-  const childPublicKey = await deriveChildPublicKey(
-    uncompressedHexPoint,
-    signerId,
-    path
-  )
-  const publicKeyNoPrefix = childPublicKey.startsWith('04')
-    ? childPublicKey.substring(2)
-    : childPublicKey
-  const hash = ethers.keccak256(Buffer.from(publicKeyNoPrefix, 'hex'))
-
-  return `0x${hash.substring(hash.length - 40)}`
-}
-
-export const generateBTCCompressedPublicKey = async (
+export const generateCompressedPublicKey = async (
   signerId: string,
   path: string,
   publicKey: string
