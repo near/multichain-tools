@@ -1,4 +1,4 @@
-export type SLIP044ChainId = 0 | 60
+export type SLIP044ChainId = 0 | 60 | 118
 
 export interface KeyDerivationPath {
   chain: SLIP044ChainId

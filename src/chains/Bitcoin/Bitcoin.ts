@@ -178,7 +178,6 @@ export class Bitcoin {
     nearAuthentication: NearAuthentication,
     path: KeyDerivationPath
   ): Promise<string> {
-    console.log('called handleTransaction')
     const { address, publicKey } = await fetchDerivedBTCAddressAndPublicKey({
       signerId: nearAuthentication.accountId,
       path,

@@ -1,33 +1,40 @@
 // cosmos.ts
-
+import { chains } from 'chain-registry'
 import { GasPrice, type StdFee } from '@cosmjs/stargate'
 import {
   Registry,
   makeAuthInfoBytes,
   makeSignDoc,
-  makeSignDocBytes,
+  makeSignBytes,
   encodePubkey,
 } from '@cosmjs/proto-signing'
 import { TxRaw } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { toBase64, fromHex } from '@cosmjs/encoding'
 import axios from 'axios'
+import { Uint64 } from '@cosmjs/math'
 
 import { fetchDerivedCosmosAddressAndPublicKey } from './utils'
 import { ChainSignaturesContract } from '../../signature'
 import { type ChainSignatureContracts, type NearAuthentication } from '../types'
 import { type KeyDerivationPath } from '../../kdf/types'
-import { type CosmosTransaction, type CosmosChainInfo } from './types'
+import { type CosmosTransaction, type CosmosNetworkIds } from './types'
+import { SignMode } from 'cosmjs-types/cosmos/tx/signing/v1beta1/signing'
 
 export class Cosmos {
   private readonly relayerUrl?: string
+
   private readonly contract: ChainSignatureContracts
+
+  private readonly chainId: CosmosNetworkIds
 
   constructor(config: {
     relayerUrl?: string
     contract: ChainSignatureContracts
+    chainId: CosmosNetworkIds
   }) {
     this.relayerUrl = config.relayerUrl
     this.contract = config.contract
+    this.chainId = config.chainId
   }
 
   /**
@@ -58,6 +65,69 @@ export class Cosmos {
   }
 
   /**
+   * Fetches chain information and creates a registry for the specified Cosmos chain.
+   *
+   * @returns {Promise<{
+   *   chainInfo: any,
+   *   prefix: string,
+   *   denom: string,
+   *   restUrl: string,
+   *   expectedChainId: string,
+   *   gasPrice: string,
+   *   registry: Registry
+   * }>} A promise that resolves with chain information and a registry.
+   * @throws {Error} If required chain information is missing.
+   */
+  async fetchChainInfoAndCreateRegistry(): Promise<{
+    chainInfo: any
+    prefix: string
+    denom: string
+    restUrl: string
+    expectedChainId: string
+    gasPrice: number
+    registry: Registry
+  }> {
+    const chainInfo = chains.find((chain) => chain.chain_id === this.chainId)
+
+    if (!chainInfo) {
+      throw new Error(`Chain info not found for chainId: ${this.chainId}`)
+    }
+
+    // Extract necessary information from chainInfo
+    const {
+      chain_name: chainName,
+      bech32_prefix: prefix,
+      chain_id: expectedChainId,
+    } = chainInfo
+    const denom = chainInfo.staking?.staking_tokens?.[0]?.denom
+    const restUrl = chainInfo.apis?.rest?.[0]?.address
+    const gasPrice = chainInfo.fees?.fee_tokens?.[0]?.average_gas_price
+
+    if (
+      !prefix ||
+      !denom ||
+      !restUrl ||
+      !expectedChainId ||
+      gasPrice === undefined
+    ) {
+      throw new Error(`Missing required chain information for ${chainName}`)
+    }
+
+    // Create a new registry
+    const registry = new Registry()
+
+    return {
+      chainInfo,
+      prefix,
+      denom,
+      restUrl,
+      expectedChainId,
+      gasPrice,
+      registry,
+    }
+  }
+
+  /**
    * Handles the process of creating and broadcasting a Cosmos transaction.
    *
    * @param {CosmosTransaction} data - The transaction data.
@@ -69,20 +139,16 @@ export class Cosmos {
   async handleTransaction(
     data: CosmosTransaction,
     nearAuthentication: NearAuthentication,
-    path: KeyDerivationPath,
-    chainInfo: CosmosChainInfo
+    path: KeyDerivationPath
   ): Promise<string> {
     const {
-      restUrl,
-      denom,
       prefix,
+      denom,
+      restUrl,
+      expectedChainId,
       gasPrice,
-      registry,
-      chainId: expectedChainId,
-    } = chainInfo
-
-    // Use the chain-specific registry if provided, otherwise create a new one
-    const registryToUse = registry || new Registry()
+      registry: registryToUse,
+    } = await this.fetchChainInfoAndCreateRegistry()
 
     // Fetch derived address and public key
     const { address, publicKey } = await fetchDerivedCosmosAddressAndPublicKey({
@@ -108,8 +174,7 @@ export class Cosmos {
 
     // Calculate fee
     const gasLimit = data.gas || 200_000
-    const gasPriceObj = GasPrice.fromString(gasPrice) // e.g., '0.025uatom'
-    const feeAmount = gasPriceObj.amount.multiply(gasLimit)
+    const feeAmount = gasPrice * gasLimit
     const fee: StdFee = {
       amount: [
         {
@@ -149,9 +214,12 @@ export class Cosmos {
     })
 
     const authInfoBytes = makeAuthInfoBytes(
-      [{ pubkey: pubKeyProto, sequence }],
+      [{ pubkey: pubKeyProto, sequence: BigInt(sequence) }],
       fee.amount,
-      Number(gasLimit)
+      Number(gasLimit),
+      undefined,
+      undefined,
+      SignMode.SIGN_MODE_DIRECT
     )
 
     // Create SignDoc
@@ -163,7 +231,7 @@ export class Cosmos {
     )
 
     // Get sign bytes
-    const signBytes = makeSignDocBytes(signDoc)
+    const signBytes = makeSignBytes(signDoc)
 
     // Sign the transaction hash using ChainSignaturesContract
     const signatureResponse = await ChainSignaturesContract.sign({
@@ -174,11 +242,19 @@ export class Cosmos {
       relayerUrl: this.relayerUrl,
     })
 
-    if (!signatureResponse?.signature) {
+    if (
+      !signatureResponse?.r ||
+      !signatureResponse?.s ||
+      signatureResponse?.v === undefined
+    ) {
       throw new Error('Failed to sign transaction')
     }
 
-    const signatureBytes = fromHex(signatureResponse.signature)
+    const signatureBytes = new Uint8Array([
+      ...fromHex(signatureResponse.r),
+      ...fromHex(signatureResponse.s),
+      signatureResponse.v,
+    ])
 
     // Assemble the signed transaction
     const txRaw = TxRaw.fromPartial({
