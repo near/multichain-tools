@@ -56,13 +56,11 @@ export class Bitcoin {
    * @returns {number} The equivalent amount in satoshis.
    */
   static toSatoshi(btc: number): number {
-    return btc * 100000000
+    return Math.round(btc * 100000000)
   }
 
   /**
    * Fetches the balance for a given Bitcoin address.
-   * This function retrieves all unspent transaction outputs (UTXOs) for the address,
-   * sums their values to calculate the total balance, and returns it as a string.
    *
    * @param {string} address - The Bitcoin address for which to fetch the balance.
    * @returns {Promise<string>} A promise that resolves to the balance of the address as a string.
@@ -76,8 +74,6 @@ export class Bitcoin {
 
   /**
    * Fetches a Bitcoin transaction by its ID and constructs a transaction object.
-   * This function retrieves the transaction details from the blockchain using the RPC endpoint,
-   * then parses the input and output data to construct a bitcoin.Transaction object.
    *
    * @param {string} transactionId - The ID of the transaction to fetch.
    * @returns {Promise<bitcoin.Transaction>} A promise that resolves to a bitcoin.Transaction object representing the fetched transaction.
@@ -117,11 +113,7 @@ export class Bitcoin {
   }
 
   /**
-   * This function takes an object containing the r and s components of a signature,
-   * pads them to ensure they are each 64 characters long, concatenates them,
-   * and then converts the concatenated string into a Buffer. This Buffer represents
-   * the full signature in hexadecimal format. If the resulting Buffer is not exactly
-   * 64 bytes long, an error is thrown.
+   * Joins the r and s components of a signature into a single Buffer.
    *
    * @param {Object} signature - An object containing the r and s components of a signature.
    * @param {string} signature.r - The r component of the signature.
@@ -144,14 +136,11 @@ export class Bitcoin {
 
   /**
    * Sends a signed transaction to the Bitcoin network.
-   * This function takes the hexadecimal representation of a signed transaction
-   * and broadcasts it to the network using a proxy URL to bypass CORS restrictions.
-   * It logs the transaction ID if the broadcast is successful, or an error message otherwise.
    *
    * @param {string} txHex - The hexadecimal string of the signed transaction.
    * @param {Object} [options] - Optional parameters.
    * @param {boolean} [options.proxy=false] - Whether to use a proxy URL for the transaction broadcast.
-   * @returns {Promise<string>} A promise that resolves with the txid once the transaction is successfully broadcast
+   * @returns {Promise<string>} A promise that resolves with the txid once the transaction is successfully broadcast.
    */
   async sendTransaction(
     txHex: string,
@@ -176,9 +165,6 @@ export class Bitcoin {
 
   /**
    * Handles the process of creating and broadcasting a Bitcoin transaction.
-   * This function takes the recipient's address, the amount to send, the account details,
-   * and the derived path for the account to create a transaction. It then signs the transaction
-   * using the chain signature contract and broadcasts it to the Bitcoin network.
    *
    * @param {BTCTransaction} data - The transaction data.
    * @param {string} data.to - The recipient's Bitcoin address.
@@ -192,6 +178,7 @@ export class Bitcoin {
     nearAuthentication: NearAuthentication,
     path: KeyDerivationPath
   ): Promise<string> {
+    console.log('called handleTransaction')
     const { address, publicKey } = await fetchDerivedBTCAddressAndPublicKey({
       signerId: nearAuthentication.accountId,
       path,
@@ -214,67 +201,21 @@ export class Bitcoin {
       network: parseBTCNetwork(this.network),
     })
 
-    const network = parseBTCNetwork(this.network)
-
+    // Since the sender address is always P2WPKH, we can assume all inputs are P2WPKH
     await Promise.all(
       inputs.map(async (utxo: UTXO) => {
         const transaction = await this.fetchTransaction(utxo.txid)
         const prevOut = transaction.outs[utxo.vout]
-        const script = prevOut.script
         const value = utxo.value
 
-        let inputOptions
-
-        // Detect the script type
-        const payment = bitcoin.payments.p2wpkh({ output: script, network })
-        if (payment.address) {
-          // P2WPKH
-          inputOptions = {
-            hash: utxo.txid,
-            index: utxo.vout,
-            witnessUtxo: {
-              script: prevOut.script,
-              value,
-            },
-          }
-        } else {
-          const p2sh = bitcoin.payments.p2sh({ output: script, network })
-          if (p2sh.address && p2sh.redeem?.output) {
-            // P2SH-P2WPKH
-            const redeemPayment = bitcoin.payments.p2wpkh({
-              output: p2sh.redeem.output,
-              network,
-            })
-            if (redeemPayment.address && redeemPayment.output) {
-              inputOptions = {
-                hash: utxo.txid,
-                index: utxo.vout,
-                witnessUtxo: {
-                  script: redeemPayment.output,
-                  value,
-                },
-                redeemScript: p2sh.redeem.output,
-              }
-            } else {
-              throw new Error(
-                `Unsupported P2SH script for UTXO ${utxo.txid}:${utxo.vout}`
-              )
-            }
-          } else {
-            const p2pkh = bitcoin.payments.p2pkh({ output: script, network })
-            if (p2pkh.address) {
-              // P2PKH
-              inputOptions = {
-                hash: utxo.txid,
-                index: utxo.vout,
-                nonWitnessUtxo: Buffer.from(transaction.toHex(), 'hex'),
-              }
-            } else {
-              throw new Error(
-                `Unsupported script type for UTXO ${utxo.txid}:${utxo.vout}`
-              )
-            }
-          }
+        // Prepare the input as P2WPKH
+        const inputOptions = {
+          hash: utxo.txid,
+          index: utxo.vout,
+          witnessUtxo: {
+            script: prevOut.script,
+            value,
+          },
         }
 
         psbt.addInput(inputOptions)
@@ -314,7 +255,7 @@ export class Bitcoin {
       },
     }
 
-    // Sign inputs sequentially to avoid potential issues
+    // Sign inputs sequentially
     for (let index = 0; index < inputs.length; index += 1) {
       await psbt.signInputAsync(index, mpcKeyPair)
     }
