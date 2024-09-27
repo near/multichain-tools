@@ -1,6 +1,6 @@
 import { ethers, keccak256 } from 'ethers'
 
-import { sign } from '../../signature'
+import { ChainSignaturesContract } from '../../signature'
 import { fetchDerivedEVMAddress, fetchEVMFeeProperties } from './utils'
 import { type ChainSignatureContracts, type NearAuthentication } from '../types'
 import { type EVMTransaction } from './types'
@@ -168,7 +168,7 @@ class EVM {
 
     const transactionHash = EVM.prepareTransactionForSignature(transaction)
 
-    const signature = await sign({
+    const signature = await ChainSignaturesContract.sign({
       transactionHash,
       path,
       nearAuthentication,
