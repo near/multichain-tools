@@ -1,9 +1,8 @@
 import { describe, test, expect } from '@jest/globals'
 import { ethers } from 'ethers'
 import {
-  getExperimentalSignatureDeposit,
-  sign,
-} from '../src/signature/signature'
+  ChainSignaturesContract
+} from '../src/signature'
 import {
   type NearAuthentication,
   type ChainSignatureContracts,
@@ -34,7 +33,7 @@ describe('Chain Signature', () => {
       process.env.NEXT_PUBLIC_CHAIN_SIGNATURE_CONTRACT_DEV_TESTNET || ''
 
     try {
-      const signature = await sign({
+      const signature = await ChainSignaturesContract.sign({
         transactionHash,
         path,
         nearAuthentication,
@@ -78,7 +77,7 @@ describe('Chain Signature', () => {
       process.env.NEXT_PUBLIC_CHAIN_SIGNATURE_CONTRACT_DEV_TESTNET || ''
 
     try {
-      const deposit = await getExperimentalSignatureDeposit(
+      const deposit = await ChainSignaturesContract.getExperimentalSignatureDeposit(
         contract,
         nearAuthentication.networkId
       )
