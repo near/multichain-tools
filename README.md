@@ -1,4 +1,4 @@
-# MultiChain Tools
+<!-- # MultiChain Tools
 
 MultiChain Tools is a TypeScript package that provides a set of utilities and functions for interacting with various blockchain networks, including Ethereum (EVM-based chains) and Bitcoin. It offers an easy way to sign and send transactions, fetch derived addresses, and estimate transaction fees using a single NEAR account that controls the keys for the other chains.
 
@@ -167,4 +167,4 @@ const btcFeeProperties = await fetchBTCFeeProperties(
   '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2',
   [{ address: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', value: 1000000 }]
 )
-```
+``` -->

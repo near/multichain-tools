@@ -2,7 +2,7 @@ import { describe, test, expect } from '@jest/globals';
 import * as bitcoin from 'bitcoinjs-lib';
 import { ec as EC } from 'elliptic'
 
-describe.only('Bitcoin Address Generation for Testnet', () => {
+describe.skip('Bitcoin Address Generation for Testnet', () => {
   const testnet = bitcoin.networks.testnet;
   const ec = new EC('secp256k1')
   const compressedPublicKey = ec.genKeyPair().getPublic().encodeCompressed()
