@@ -4,6 +4,7 @@ import {
   SigningStargateClient,
   type StdFee,
   assertIsDeliverTxSuccess,
+  calculateFee,
 } from '@cosmjs/stargate'
 import {
   Registry,
@@ -135,10 +136,7 @@ export class Cosmos {
 
   private createFee(denom: string, gasPrice: number, gas?: number): StdFee {
     const gasLimit = gas || 200_000
-    return {
-      amount: [{ denom, amount: (gasPrice * gasLimit).toString() }],
-      gas: gasLimit.toString(),
-    }
+    return calculateFee(gasLimit, GasPrice.fromString(`${gasPrice}${denom}`))
   }
 
   private updateMessages(
@@ -157,6 +155,7 @@ export class Cosmos {
     nearAuthentication: NearAuthentication,
     path: KeyDerivationPath
   ): Promise<string> {
+    console.log('v3')
     const { prefix, denom, rpcUrl, gasPrice } = await this.fetchChainInfo()
 
     const { address, publicKey } = await fetchDerivedCosmosAddressAndPublicKey({
