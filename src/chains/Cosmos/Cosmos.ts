@@ -74,6 +74,84 @@ export class Cosmos {
     return { prefix, denom, rpcUrl, expectedChainId, gasPrice }
   }
 
+  private async createSigner(
+    address: string,
+    publicKey: Uint8Array,
+    path: KeyDerivationPath,
+    nearAuthentication: NearAuthentication
+  ): Promise<OfflineDirectSigner> {
+    return {
+      getAccounts: async () => [
+        {
+          address,
+          algo: 'secp256k1',
+          pubkey: publicKey,
+        },
+      ],
+      signDirect: async (signerAddress: string, signDoc: SignDoc) => {
+        if (signerAddress !== address) {
+          throw new Error(`Address ${signerAddress} not found in wallet`)
+        }
+
+        const signBytes = makeSignBytes(signDoc)
+        const signatureResponse = await this.signTransaction(
+          signBytes,
+          path,
+          nearAuthentication
+        )
+
+        return {
+          signed: signDoc,
+          signature: {
+            pub_key: {
+              type: 'tendermint/PubKeySecp256k1',
+              value: toBase64(publicKey),
+            },
+            signature: toBase64(signatureResponse),
+          },
+        }
+      },
+    }
+  }
+
+  private async signTransaction(
+    signBytes: Uint8Array,
+    path: KeyDerivationPath,
+    nearAuthentication: NearAuthentication
+  ): Promise<Uint8Array> {
+    const signatureResponse = await ChainSignaturesContract.sign({
+      transactionHash: sha256(signBytes),
+      path,
+      nearAuthentication,
+      contract: this.contract,
+      relayerUrl: this.relayerUrl,
+    })
+
+    return new Uint8Array([
+      ...fromHex(signatureResponse.r),
+      ...fromHex(signatureResponse.s),
+    ])
+  }
+
+  private createFee(denom: string, gasPrice: number, gas?: number): StdFee {
+    const gasLimit = gas || 200_000
+    return {
+      amount: [{ denom, amount: (gasPrice * gasLimit).toString() }],
+      gas: gasLimit.toString(),
+    }
+  }
+
+  private updateMessages(
+    messages: EncodeObject[],
+    address: string
+  ): EncodeObject[] {
+    return messages.map((msg) =>
+      'fromAddress' in msg.value && !msg.value.fromAddress
+        ? { ...msg, value: { ...msg.value, fromAddress: address } }
+        : msg
+    )
+  }
+
   async handleTransaction(
     data: CosmosTransaction,
     nearAuthentication: NearAuthentication,
@@ -89,45 +167,12 @@ export class Cosmos {
       prefix,
     })
 
-    const signer: OfflineDirectSigner = {
-      getAccounts: async () => [
-        {
-          address,
-          algo: 'secp256k1',
-          pubkey: publicKey,
-        },
-      ],
-      signDirect: async (signerAddress: string, signDoc: SignDoc) => {
-        if (signerAddress !== address) {
-          throw new Error(`Address ${signerAddress} not found in wallet`)
-        }
-
-        const signBytes = makeSignBytes(signDoc)
-        const signatureResponse = await ChainSignaturesContract.sign({
-          transactionHash: sha256(signBytes),
-          path,
-          nearAuthentication,
-          contract: this.contract,
-          relayerUrl: this.relayerUrl,
-        })
-
-        const signatureBytes = new Uint8Array([
-          ...fromHex(signatureResponse.r),
-          ...fromHex(signatureResponse.s),
-        ])
-
-        return {
-          signed: signDoc,
-          signature: {
-            pub_key: {
-              type: 'tendermint/PubKeySecp256k1',
-              value: toBase64(publicKey),
-            },
-            signature: toBase64(signatureBytes),
-          },
-        }
-      },
-    }
+    const signer = await this.createSigner(
+      address,
+      publicKey,
+      path,
+      nearAuthentication
+    )
 
     const client = await SigningStargateClient.connectWithSigner(
       rpcUrl,
@@ -138,18 +183,8 @@ export class Cosmos {
       }
     )
 
-    const fee: StdFee = {
-      amount: [
-        { denom, amount: (gasPrice * (data.gas || 200_000)).toString() },
-      ],
-      gas: (data.gas || 200_000).toString(),
-    }
-
-    const updatedMessages: EncodeObject[] = data.messages.map((msg) =>
-      'fromAddress' in msg.value && !msg.value.fromAddress
-        ? { ...msg, value: { ...msg.value, fromAddress: address } }
-        : msg
-    )
+    const fee = this.createFee(denom, gasPrice, data.gas)
+    const updatedMessages = this.updateMessages(data.messages, address)
 
     const result = await client.signAndBroadcast(
       address,
