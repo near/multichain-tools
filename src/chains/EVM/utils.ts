@@ -1,9 +1,12 @@
 import { ethers } from 'ethers'
 
-import { generateEthereumAddress } from '../../kdf/kdf'
 import { ChainSignaturesContract } from '../../signature'
 import { getCanonicalizedDerivationPath } from '../../kdf/utils'
 import { type FetchEVMAddressRequest } from './types'
+import {
+  najPublicKeyStrToUncompressedHexPoint,
+  deriveChildPublicKey,
+} from '../../kdf/kdf'
 
 /**
  * Estimates the amount of gas that a transaction will consume.
@@ -39,6 +42,26 @@ export async function fetchEVMFeeProperties(
     maxPriorityFeePerGas,
     maxFee: maxFeePerGas * gasLimit,
   }
+}
+
+export const generateEthereumAddress = async (
+  signerId: string,
+  path: string,
+  publicKey: string
+): Promise<string> => {
+  const uncompressedHexPoint = najPublicKeyStrToUncompressedHexPoint(publicKey)
+  const childPublicKey = await deriveChildPublicKey(
+    uncompressedHexPoint,
+    signerId,
+    path
+  )
+  const publicKeyNoPrefix = childPublicKey.startsWith('04')
+    ? childPublicKey.substring(2)
+    : childPublicKey
+
+  const hash = ethers.keccak256(Buffer.from(publicKeyNoPrefix, 'hex'))
+
+  return `0x${hash.substring(hash.length - 40)}`
 }
 
 /**

@@ -1,6 +1,6 @@
 import { type Account, Contract } from '@near-js/accounts'
 import { actionCreators } from '@near-js/transactions'
-import { getNearAccount, NEAR_MAX_GAS, toRVS } from './utils'
+import { getNearAccount, NEAR_MAX_GAS, toRSV } from './utils'
 import BN from 'bn.js'
 import { ethers } from 'ethers'
 
@@ -47,7 +47,7 @@ export const ChainSignaturesContract = {
       viewMethods: ['public_key', 'experimental_signature_deposit'],
       changeMethods: ['sign'],
       useLocalViewExecution: false,
-    }) as MultiChainContract
+    })
   },
 
   sign: async ({
@@ -112,7 +112,7 @@ export const ChainSignaturesContract = {
       contract
     )
 
-    return await chainSignaturesContract.public_key()
+    return chainSignaturesContract.public_key()
   },
 
   getExperimentalSignatureDeposit: async (
@@ -145,13 +145,13 @@ const signDirect = async (
     contract
   )
 
-  const signature = await chainSignaturesContract.sign({
+  const signature = (await chainSignaturesContract.sign({
     args: { request: signArgs },
     gas: NEAR_MAX_GAS,
     amount: deposit,
-  })
+  })) as MPCSignature
 
-  return toRVS(signature)
+  return toRSV(signature)
 }
 
 const signWithRelayer = async (
@@ -214,7 +214,7 @@ const signWithRelayer = async (
     const parsedJSONSignature = JSON.parse(signature) as {
       Ok: MPCSignature
     }
-    return toRVS(parsedJSONSignature.Ok)
+    return toRSV(parsedJSONSignature.Ok)
   }
   throw new Error('Signature error, please retry')
 }
