@@ -222,7 +222,6 @@ class ChainSignaturesContractSigner implements OfflineDirectSigner {
     const signatureBytes = new Uint8Array([
       ...fromHex(signatureResponse.r),
       ...fromHex(signatureResponse.s),
-      // signatureResponse.v,
     ])
     // Build the response
     const publicKey = encodePubkey({
