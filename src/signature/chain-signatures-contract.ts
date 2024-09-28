@@ -1,6 +1,6 @@
 import { type Account, Contract } from '@near-js/accounts'
 import { actionCreators } from '@near-js/transactions'
-import { getNearAccount, NEAR_MAX_GAS, toRVS } from './utils'
+import { getNearAccount, NEAR_MAX_GAS, toRSV } from './utils'
 import BN from 'bn.js'
 import { ethers } from 'ethers'
 
@@ -151,7 +151,7 @@ const signDirect = async (
     amount: deposit,
   })) as MPCSignature
 
-  return toRVS(signature)
+  return toRSV(signature)
 }
 
 const signWithRelayer = async (
@@ -214,7 +214,7 @@ const signWithRelayer = async (
     const parsedJSONSignature = JSON.parse(signature) as {
       Ok: MPCSignature
     }
-    return toRVS(parsedJSONSignature.Ok)
+    return toRSV(parsedJSONSignature.Ok)
   }
   throw new Error('Signature error, please retry')
 }

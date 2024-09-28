@@ -7,7 +7,7 @@ import { KeyPair } from 'near-api-js'
 
 export const NEAR_MAX_GAS = new BN('300000000000000')
 
-export const toRVS = (signature: MPCSignature): RSVSignature => {
+export const toRSV = (signature: MPCSignature): RSVSignature => {
   return {
     r: signature.big_r.affine_point.substring(2),
     s: signature.s.scalar,
