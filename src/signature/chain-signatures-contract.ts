@@ -47,7 +47,7 @@ export const ChainSignaturesContract = {
       viewMethods: ['public_key', 'experimental_signature_deposit'],
       changeMethods: ['sign'],
       useLocalViewExecution: false,
-    }) as MultiChainContract
+    })
   },
 
   sign: async ({
@@ -112,7 +112,7 @@ export const ChainSignaturesContract = {
       contract
     )
 
-    return await chainSignaturesContract.public_key()
+    return chainSignaturesContract.public_key()
   },
 
   getExperimentalSignatureDeposit: async (
@@ -145,11 +145,11 @@ const signDirect = async (
     contract
   )
 
-  const signature = await chainSignaturesContract.sign({
+  const signature = (await chainSignaturesContract.sign({
     args: { request: signArgs },
     gas: NEAR_MAX_GAS,
     amount: deposit,
-  })
+  })) as MPCSignature
 
   return toRVS(signature)
 }
