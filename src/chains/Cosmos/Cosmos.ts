@@ -155,7 +155,6 @@ export class Cosmos {
     nearAuthentication: NearAuthentication,
     path: KeyDerivationPath
   ): Promise<string> {
-    console.log('v3')
     const { prefix, denom, rpcUrl, gasPrice } = await this.fetchChainInfo()
 
     const { address, publicKey } = await fetchDerivedCosmosAddressAndPublicKey({
