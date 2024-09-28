@@ -144,7 +144,7 @@ export class Cosmos {
     address: string
   ): EncodeObject[] {
     return messages.map((msg) =>
-      'fromAddress' in msg.value && !msg.value.fromAddress
+      !msg.value.fromAddress
         ? { ...msg, value: { ...msg.value, fromAddress: address } }
         : msg
     )
