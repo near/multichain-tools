@@ -7,7 +7,7 @@ import { type KeyDerivationPath } from '../../kdf/types'
 import { toRSV } from '../../signature/utils'
 import { type MPCSignature, type RSVSignature } from '../../signature/types'
 
-class EVM {
+export class EVM {
   private readonly provider: ethers.JsonRpcProvider
   private readonly contract: ChainSignatureContracts
   private readonly signer: (txHash: Uint8Array) => Promise<MPCSignature>
@@ -134,5 +134,3 @@ class EVM {
     return transactionResponse
   }
 }
-
-export default EVM
