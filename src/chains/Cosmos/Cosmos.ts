@@ -62,12 +62,9 @@ export class Cosmos {
           throw new Error(`Address ${signerAddress} not found in wallet`)
         }
 
-        const hashedTx = sha256(makeSignBytes(signDoc))
-
-        const mpcSignature = await this.signer(hashedTx)
-        const rsvSignature = toRSV(mpcSignature)
-
-        const signatureResponse = this.parseRSVSignature(rsvSignature)
+        const txHash = sha256(makeSignBytes(signDoc))
+        const mpcSignature = await this.signer(txHash)
+        const signature = this.parseRSVSignature(toRSV(mpcSignature))
 
         return {
           signed: signDoc,
@@ -76,7 +73,7 @@ export class Cosmos {
               type: 'tendermint/PubKeySecp256k1',
               value: toBase64(publicKey),
             },
-            signature: toBase64(signatureResponse),
+            signature: toBase64(signature),
           },
         }
       },

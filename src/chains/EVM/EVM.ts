@@ -10,7 +10,7 @@ import { type MPCSignature, type RSVSignature } from '../../signature/types'
 class EVM {
   private readonly provider: ethers.JsonRpcProvider
   private readonly contract: ChainSignatureContracts
-  private readonly signer: (hashedTx: Uint8Array) => Promise<MPCSignature>
+  private readonly signer: (txHash: Uint8Array) => Promise<MPCSignature>
 
   /**
    * Constructs an instance of the EVM class with specified configuration.
@@ -22,7 +22,7 @@ class EVM {
   constructor(config: {
     providerUrl: string
     contract: ChainSignatureContracts
-    signer: (hashedTx: Uint8Array) => Promise<MPCSignature>
+    signer: (txHash: Uint8Array) => Promise<MPCSignature>
   }) {
     this.provider = new ethers.JsonRpcProvider(config.providerUrl)
     this.contract = config.contract
@@ -172,19 +172,14 @@ class EVM {
       from,
     })
 
-    const transactionHash = EVM.prepareTransactionForSignature(transaction)
-    const mpcSignature = await this.signer(transactionHash)
-    const rsvSignature = toRSV(mpcSignature)
+    const txHash = EVM.prepareTransactionForSignature(transaction)
+    const mpcSignature = await this.signer(txHash)
+    const transactionResponse = await this.sendSignedTransaction(
+      transaction,
+      this.parseRSVSignature(toRSV(mpcSignature))
+    )
 
-    if (mpcSignature) {
-      const transactionResponse = await this.sendSignedTransaction(
-        transaction,
-        this.parseRSVSignature(rsvSignature)
-      )
-      return transactionResponse
-    }
-
-    return undefined
+    return transactionResponse
   }
 }
 

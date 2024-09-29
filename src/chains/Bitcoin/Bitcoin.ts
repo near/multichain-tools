@@ -216,8 +216,7 @@ export class Bitcoin {
       publicKey,
       sign: async (hash: Buffer): Promise<Buffer> => {
         const mpcSignature = await this.signer(hash)
-        const rsvSignature = toRSV(mpcSignature)
-        return Bitcoin.parseRSVSignature(rsvSignature)
+        return Bitcoin.parseRSVSignature(toRSV(mpcSignature))
       },
     }
 
