@@ -45,12 +45,6 @@ export class Bitcoin {
     return Math.round(btc * 100000000)
   }
 
-  /**
-   * Fetches the balance for a given Bitcoin address.
-   *
-   * @param {string} address - The Bitcoin address for which to fetch the balance.
-   * @returns {Promise<string>} A promise that resolves to the balance of the address as a string.
-   */
   async fetchBalance(address: string): Promise<string> {
     const utxos = await fetchBTCUTXOs(this.providerUrl, address)
     return Bitcoin.toBTC(
@@ -58,12 +52,6 @@ export class Bitcoin {
     ).toString()
   }
 
-  /**
-   * Fetches a Bitcoin transaction by its ID and constructs a transaction object.
-   *
-   * @param {string} transactionId - The ID of the transaction to fetch.
-   * @returns {Promise<bitcoin.Transaction>} A promise that resolves to a bitcoin.Transaction object representing the fetched transaction.
-   */
   async fetchTransaction(transactionId: string): Promise<bitcoin.Transaction> {
     const { data } = await axios.get<Transaction>(
       `${this.providerUrl}tx/${transactionId}`
@@ -111,14 +99,6 @@ export class Bitcoin {
     return rawSignature
   }
 
-  /**
-   * Sends a signed transaction to the Bitcoin network.
-   *
-   * @param {string} txHex - The hexadecimal string of the signed transaction.
-   * @param {Object} [options] - Optional parameters.
-   * @param {boolean} [options.proxy=false] - Whether to use a proxy URL for the transaction broadcast.
-   * @returns {Promise<string>} A promise that resolves with the txid once the transaction is successfully broadcast.
-   */
   async sendTransaction(
     txHex: string,
     options?: { proxy?: boolean }
@@ -140,16 +120,6 @@ export class Bitcoin {
     }
   }
 
-  /**
-   * Handles the process of creating and broadcasting a Bitcoin transaction.
-   *
-   * @param {BTCTransaction} data - The transaction data.
-   * @param {string} data.to - The recipient's Bitcoin address.
-   * @param {string} data.value - The amount of Bitcoin to send (in BTC).
-   * @param {NearAuthentication} nearAuthentication - The object containing the user's authentication information.
-   * @param {string} path - The key derivation path for the account.
-   * @returns {Promise<string>} A promise that resolves to the transaction ID once the transaction is successfully broadcast.
-   */
   async handleTransaction(
     data: BTCTransaction,
     nearAuthentication: NearAuthentication,
