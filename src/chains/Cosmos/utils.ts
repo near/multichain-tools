@@ -8,13 +8,8 @@ import { getCanonicalizedDerivationPath } from '../../kdf/utils'
 
 import { type CosmosPublicKeyAndAddressRequest } from './types'
 import axios from 'axios'
+import { chains } from 'chain-registry'
 
-/**
- * Fetches the derived Cosmos address and public key for a given signer ID and derivation path.
- *
- * @param {CosmosPublicKeyAndAddressRequest} params - The parameters for the request.
- * @returns {Promise<{ address: string; publicKey: Uint8Array }>} The derived address and public key.
- */
 export async function fetchDerivedCosmosAddressAndPublicKey({
   signerId,
   path,
@@ -23,12 +18,12 @@ export async function fetchDerivedCosmosAddressAndPublicKey({
   prefix,
 }: CosmosPublicKeyAndAddressRequest): Promise<{
   address: string
-  publicKey: Uint8Array
+  publicKey: Buffer
 }> {
-  const contractRootPublicKey = await ChainSignaturesContract.getRootPublicKey(
-    multichainContractId,
-    nearNetworkId
-  )
+  const contractRootPublicKey = await ChainSignaturesContract.getPublicKey({
+    networkId: nearNetworkId,
+    contract: multichainContractId,
+  })
 
   if (!contractRootPublicKey) {
     throw new Error('Failed to fetch root public key')
@@ -44,16 +39,9 @@ export async function fetchDerivedCosmosAddressAndPublicKey({
 
   const address = pubkeyToAddress(publicKey, prefix)
 
-  return { address, publicKey }
+  return { address, publicKey: Buffer.from(publicKey) }
 }
 
-/**
- * Converts a public key to a Cosmos address.
- *
- * @param {Uint8Array} pubkey - The public key.
- * @param {string} prefix - The Bech32 prefix for the network.
- * @returns {string} The Cosmos address.
- */
 function pubkeyToAddress(pubkey: Uint8Array, prefix: string): string {
   const pubkeyRaw =
     pubkey.length === 33 ? pubkey : Secp256k1.compressPubkey(pubkey)
@@ -63,20 +51,49 @@ function pubkeyToAddress(pubkey: Uint8Array, prefix: string): string {
   return address
 }
 
-/**
- * Fetches the balance for a given Cosmos address.
- *
- * @param {string} address - The Cosmos address for which to fetch the balance.
- * @param {string} restUrl - The REST API URL for the chain.
- * @param {string} denom - The denomination of the token to fetch the balance for.
- * @returns {Promise<string>} A promise that resolves to the balance of the address as a string.
- */
+export const fetchChainInfo = async (
+  chainId: string
+): Promise<{
+  prefix: string
+  denom: string
+  rpcUrl: string
+  restUrl: string
+  expectedChainId: string
+  gasPrice: number
+}> => {
+  const chainInfo = chains.find((chain) => chain.chain_id === chainId)
+  if (!chainInfo) {
+    throw new Error(`Chain info not found for chainId: ${chainId}`)
+  }
+
+  const { bech32_prefix: prefix, chain_id: expectedChainId } = chainInfo
+  const denom = chainInfo.staking?.staking_tokens?.[0]?.denom
+  const rpcUrl = chainInfo.apis?.rpc?.[0]?.address
+  const restUrl = chainInfo.apis?.rest?.[0]?.address
+  const gasPrice = chainInfo.fees?.fee_tokens?.[0]?.average_gas_price
+
+  if (
+    !prefix ||
+    !denom ||
+    !rpcUrl ||
+    !restUrl ||
+    !expectedChainId ||
+    gasPrice === undefined
+  ) {
+    throw new Error(
+      `Missing required chain information for ${chainInfo.chain_name}`
+    )
+  }
+
+  return { prefix, denom, rpcUrl, restUrl, expectedChainId, gasPrice }
+}
+
 export async function fetchCosmosBalance(
   address: string,
-  restUrl: string,
-  denom: string
+  chainId: string
 ): Promise<string> {
   try {
+    const { restUrl, denom } = await fetchChainInfo(chainId)
     const balanceUrl = `${restUrl}/cosmos/bank/v1beta1/balances/${address}`
     const response = await axios.get(balanceUrl)
 

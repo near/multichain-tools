@@ -20,7 +20,7 @@ export function parseSignedDelegateForRelayer(
               FunctionCall: {
                 method_name: action.functionCall.methodName,
                 args: Buffer.from(action.functionCall.args).toString('base64'),
-                gas: action.functionCall.gas.toNumber(),
+                gas: Number(action.functionCall.gas),
                 deposit: action.functionCall.deposit.toString(),
               },
             }
@@ -28,8 +28,8 @@ export function parseSignedDelegateForRelayer(
           return undefined
         })
         .flatMap((t) => (t ? [t] : [])),
-      nonce: signedDelegate.delegateAction.nonce.toNumber(),
-      max_block_height: signedDelegate.delegateAction.maxBlockHeight.toNumber(),
+      nonce: Number(signedDelegate.delegateAction.nonce),
+      max_block_height: Number(signedDelegate.delegateAction.maxBlockHeight),
       public_key: signedDelegate.delegateAction.publicKey.toString(),
       receiver_id: signedDelegate.delegateAction.receiverId,
       sender_id: signedDelegate.delegateAction.senderId,

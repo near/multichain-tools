@@ -1,4 +1,3 @@
-import { chains } from 'chain-registry'
 import {
   GasPrice,
   SigningStargateClient,
@@ -16,70 +15,38 @@ import { type SignDoc } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { toBase64, fromHex } from '@cosmjs/encoding'
 import { sha256 } from '@cosmjs/crypto'
 
-import { fetchDerivedCosmosAddressAndPublicKey } from './utils'
-import { ChainSignaturesContract } from '../../signature'
+import { fetchChainInfo, fetchDerivedCosmosAddressAndPublicKey } from './utils'
 import { type ChainSignatureContracts, type NearAuthentication } from '../types'
 import { type KeyDerivationPath } from '../../kdf/types'
 import { type CosmosTransaction, type CosmosNetworkIds } from './types'
+import { type MPCSignature, type RSVSignature } from '../../signature/types'
+import { toRSV } from '../../signature/utils'
 
 export class Cosmos {
   private readonly registry: Registry
-  private readonly relayerUrl: string | undefined
   private readonly contract: ChainSignatureContracts
   private readonly chainId: CosmosNetworkIds
+  private readonly signer: (txHash: Uint8Array) => Promise<MPCSignature>
+  // TODO: should include providerUrl, so the user can choose rpc
 
   constructor({
-    relayerUrl,
     contract,
     chainId,
+    signer,
   }: {
-    relayerUrl?: string | undefined
     contract: ChainSignatureContracts
     chainId: CosmosNetworkIds
+    signer: (txHash: Uint8Array) => Promise<MPCSignature>
   }) {
     this.registry = new Registry()
-    this.relayerUrl = relayerUrl
     this.contract = contract
     this.chainId = chainId
-  }
-
-  private async fetchChainInfo(): Promise<{
-    prefix: string
-    denom: string
-    rpcUrl: string
-    expectedChainId: string
-    gasPrice: number
-  }> {
-    const chainInfo = chains.find((chain) => chain.chain_id === this.chainId)
-    if (!chainInfo) {
-      throw new Error(`Chain info not found for chainId: ${this.chainId}`)
-    }
-
-    const { bech32_prefix: prefix, chain_id: expectedChainId } = chainInfo
-    const denom = chainInfo.staking?.staking_tokens?.[0]?.denom
-    const rpcUrl = chainInfo.apis?.rpc?.[0]?.address
-    const gasPrice = chainInfo.fees?.fee_tokens?.[0]?.average_gas_price
-
-    if (
-      !prefix ||
-      !denom ||
-      !rpcUrl ||
-      !expectedChainId ||
-      gasPrice === undefined
-    ) {
-      throw new Error(
-        `Missing required chain information for ${chainInfo.chain_name}`
-      )
-    }
-
-    return { prefix, denom, rpcUrl, expectedChainId, gasPrice }
+    this.signer = signer
   }
 
   private async createSigner(
     address: string,
-    publicKey: Uint8Array,
-    path: KeyDerivationPath,
-    nearAuthentication: NearAuthentication
+    publicKey: Uint8Array
   ): Promise<OfflineDirectSigner> {
     return {
       getAccounts: async () => [
@@ -94,12 +61,9 @@ export class Cosmos {
           throw new Error(`Address ${signerAddress} not found in wallet`)
         }
 
-        const signBytes = makeSignBytes(signDoc)
-        const signatureResponse = await this.signTransaction(
-          signBytes,
-          path,
-          nearAuthentication
-        )
+        const txHash = sha256(makeSignBytes(signDoc))
+        const mpcSignature = await this.signer(txHash)
+        const signature = this.parseRSVSignature(toRSV(mpcSignature))
 
         return {
           signed: signDoc,
@@ -108,29 +72,17 @@ export class Cosmos {
               type: 'tendermint/PubKeySecp256k1',
               value: toBase64(publicKey),
             },
-            signature: toBase64(signatureResponse),
+            signature: toBase64(signature),
           },
         }
       },
     }
   }
 
-  private async signTransaction(
-    signBytes: Uint8Array,
-    path: KeyDerivationPath,
-    nearAuthentication: NearAuthentication
-  ): Promise<Uint8Array> {
-    const signatureResponse = await ChainSignaturesContract.sign({
-      transactionHash: sha256(signBytes),
-      path,
-      nearAuthentication,
-      contract: this.contract,
-      relayerUrl: this.relayerUrl,
-    })
-
+  parseRSVSignature(rsvSignature: RSVSignature): Uint8Array {
     return new Uint8Array([
-      ...fromHex(signatureResponse.r),
-      ...fromHex(signatureResponse.s),
+      ...fromHex(rsvSignature.r),
+      ...fromHex(rsvSignature.s),
     ])
   }
 
@@ -155,7 +107,9 @@ export class Cosmos {
     nearAuthentication: NearAuthentication,
     path: KeyDerivationPath
   ): Promise<string> {
-    const { prefix, denom, rpcUrl, gasPrice } = await this.fetchChainInfo()
+    const { prefix, denom, rpcUrl, gasPrice } = await fetchChainInfo(
+      this.chainId
+    )
 
     const { address, publicKey } = await fetchDerivedCosmosAddressAndPublicKey({
       signerId: nearAuthentication.accountId,
@@ -165,12 +119,7 @@ export class Cosmos {
       prefix,
     })
 
-    const signer = await this.createSigner(
-      address,
-      publicKey,
-      path,
-      nearAuthentication
-    )
+    const signer = await this.createSigner(address, publicKey)
 
     const client = await SigningStargateClient.connectWithSigner(
       rpcUrl,

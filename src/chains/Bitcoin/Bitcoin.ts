@@ -1,7 +1,6 @@
 import axios from 'axios'
 import * as bitcoin from 'bitcoinjs-lib'
 
-import { ChainSignaturesContract } from '../../signature'
 import {
   fetchBTCFeeProperties,
   fetchBTCUTXOs,
@@ -17,54 +16,35 @@ import {
   type BTCOutput,
   type Transaction,
 } from './types'
+import { toRSV } from '../../signature/utils'
+import { type RSVSignature, type MPCSignature } from '../../signature/types'
 
 export class Bitcoin {
   private readonly network: BTCNetworkIds
-
   private readonly providerUrl: string
-
-  private readonly relayerUrl?: string
-
   private readonly contract: ChainSignatureContracts
+  private readonly signer: (txHash: Uint8Array) => Promise<MPCSignature>
 
   constructor(config: {
     network: BTCNetworkIds
     providerUrl: string
-    relayerUrl?: string
     contract: ChainSignatureContracts
+    signer: (txHash: Uint8Array) => Promise<MPCSignature>
   }) {
     this.network = config.network
     this.providerUrl = config.providerUrl
-    this.relayerUrl = config.relayerUrl
     this.contract = config.contract
+    this.signer = config.signer
   }
 
-  /**
-   * Converts a value from satoshis to bitcoins.
-   *
-   * @param {number} satoshis - The amount in satoshis to convert.
-   * @returns {number} The equivalent amount in bitcoins.
-   */
   static toBTC(satoshis: number): number {
     return satoshis / 100000000
   }
 
-  /**
-   * Converts a value from bitcoins to satoshis.
-   *
-   * @param {number} btc - The amount in bitcoins to convert.
-   * @returns {number} The equivalent amount in satoshis.
-   */
   static toSatoshi(btc: number): number {
     return Math.round(btc * 100000000)
   }
 
-  /**
-   * Fetches the balance for a given Bitcoin address.
-   *
-   * @param {string} address - The Bitcoin address for which to fetch the balance.
-   * @returns {Promise<string>} A promise that resolves to the balance of the address as a string.
-   */
   async fetchBalance(address: string): Promise<string> {
     const utxos = await fetchBTCUTXOs(this.providerUrl, address)
     return Bitcoin.toBTC(
@@ -72,12 +52,6 @@ export class Bitcoin {
     ).toString()
   }
 
-  /**
-   * Fetches a Bitcoin transaction by its ID and constructs a transaction object.
-   *
-   * @param {string} transactionId - The ID of the transaction to fetch.
-   * @returns {Promise<bitcoin.Transaction>} A promise that resolves to a bitcoin.Transaction object representing the fetched transaction.
-   */
   async fetchTransaction(transactionId: string): Promise<bitcoin.Transaction> {
     const { data } = await axios.get<Transaction>(
       `${this.providerUrl}tx/${transactionId}`
@@ -112,16 +86,7 @@ export class Bitcoin {
     return tx
   }
 
-  /**
-   * Joins the r and s components of a signature into a single Buffer.
-   *
-   * @param {Object} signature - An object containing the r and s components of a signature.
-   * @param {string} signature.r - The r component of the signature.
-   * @param {string} signature.s - The s component of the signature.
-   * @returns {Buffer} A Buffer representing the concatenated r and s components of the signature.
-   * @throws {Error} Throws an error if the resulting Buffer is not exactly 64 bytes long.
-   */
-  static joinSignature(signature: { r: string; s: string }): Buffer {
+  static parseRSVSignature(signature: RSVSignature): Buffer {
     const r = signature.r.padStart(64, '0')
     const s = signature.s.padStart(64, '0')
 
@@ -134,14 +99,6 @@ export class Bitcoin {
     return rawSignature
   }
 
-  /**
-   * Sends a signed transaction to the Bitcoin network.
-   *
-   * @param {string} txHex - The hexadecimal string of the signed transaction.
-   * @param {Object} [options] - Optional parameters.
-   * @param {boolean} [options.proxy=false] - Whether to use a proxy URL for the transaction broadcast.
-   * @returns {Promise<string>} A promise that resolves with the txid once the transaction is successfully broadcast.
-   */
   async sendTransaction(
     txHex: string,
     options?: { proxy?: boolean }
@@ -158,21 +115,11 @@ export class Bitcoin {
       }
       throw new Error(`Failed to broadcast transaction: ${response.data}`)
     } catch (error: unknown) {
-      console.log(error)
+      console.error(error)
       throw new Error(`Error broadcasting transaction`)
     }
   }
 
-  /**
-   * Handles the process of creating and broadcasting a Bitcoin transaction.
-   *
-   * @param {BTCTransaction} data - The transaction data.
-   * @param {string} data.to - The recipient's Bitcoin address.
-   * @param {string} data.value - The amount of Bitcoin to send (in BTC).
-   * @param {NearAuthentication} nearAuthentication - The object containing the user's authentication information.
-   * @param {string} path - The key derivation path for the account.
-   * @returns {Promise<string>} A promise that resolves to the transaction ID once the transaction is successfully broadcast.
-   */
   async handleTransaction(
     data: BTCTransaction,
     nearAuthentication: NearAuthentication,
@@ -235,28 +182,17 @@ export class Bitcoin {
       }
     })
 
-    const mpcKeyPair = {
+    const keyPair = {
       publicKey,
       sign: async (hash: Buffer): Promise<Buffer> => {
-        const signature = await ChainSignaturesContract.sign({
-          transactionHash: hash,
-          path,
-          nearAuthentication,
-          contract: this.contract,
-          relayerUrl: this.relayerUrl,
-        })
-
-        if (!signature) {
-          throw new Error('Failed to sign transaction')
-        }
-
-        return Bitcoin.joinSignature(signature)
+        const mpcSignature = await this.signer(hash)
+        return Bitcoin.parseRSVSignature(toRSV(mpcSignature))
       },
     }
 
-    // Sign inputs sequentially
+    // Sign inputs sequentially to avoid nonce issues
     for (let index = 0; index < inputs.length; index += 1) {
-      await psbt.signInputAsync(index, mpcKeyPair)
+      await psbt.signInputAsync(index, keyPair)
     }
 
     psbt.finalizeAllInputs()

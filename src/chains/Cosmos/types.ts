@@ -1,7 +1,11 @@
 // types.ts
 
 import { type KeyDerivationPath } from '../../kdf/types'
-import { type ChainSignatureContracts, type NearAuthentication } from '../types'
+import {
+  type NearNetworkIds,
+  type ChainSignatureContracts,
+  type NearAuthentication,
+} from '../types'
 import { type EncodeObject } from '@cosmjs/proto-signing'
 
 export type CosmosNetworkIds = string
@@ -15,7 +19,7 @@ export interface CosmosTransaction {
 export interface CosmosPublicKeyAndAddressRequest {
   signerId: string
   path: KeyDerivationPath
-  nearNetworkId: string
+  nearNetworkId: NearNetworkIds
   multichainContractId: ChainSignatureContracts
   prefix: string
 }

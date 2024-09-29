@@ -4,6 +4,8 @@ export { ChainSignaturesContract } from './signature/chain-signatures-contract'
 export * from './signAndSendMethods'
 
 // EVM
+export { EVM } from './chains/EVM/EVM'
+
 export {
   fetchDerivedEVMAddress,
   fetchEVMFeeProperties,
@@ -16,6 +18,8 @@ export type {
 } from './chains/EVM/types'
 
 // Bitcoin
+export { Bitcoin } from './chains/Bitcoin/Bitcoin'
+
 export {
   fetchBTCFeeProperties,
   fetchDerivedBTCAddressAndPublicKey,
@@ -29,6 +33,8 @@ export type {
 } from './chains/Bitcoin/types'
 
 // Cosmos
+export { Cosmos } from './chains/Cosmos/Cosmos'
+
 export {
   fetchDerivedCosmosAddressAndPublicKey,
   fetchCosmosBalance,

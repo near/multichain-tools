@@ -2,9 +2,10 @@ import { Bitcoin } from './chains/Bitcoin/Bitcoin'
 import { type BitcoinRequest } from './chains/Bitcoin/types'
 import { type CosmosRequest } from './chains/Cosmos/types'
 import { Cosmos } from './chains/Cosmos/Cosmos'
-import EVM from './chains/EVM/EVM'
+import { EVM } from './chains/EVM/EVM'
 import { type EVMRequest } from './chains/EVM/types'
 import { type Response } from './chains/types'
+import { ChainSignaturesContract } from './signature/chain-signatures-contract'
 
 export const signAndSendEVMTransaction = async (
   req: EVMRequest
@@ -12,7 +13,14 @@ export const signAndSendEVMTransaction = async (
   try {
     const evm = new EVM({
       ...req.chainConfig,
-      relayerUrl: req.fastAuthRelayerUrl,
+      signer: async (txHash) =>
+        await ChainSignaturesContract.sign({
+          hashedTx: txHash,
+          path: req.derivationPath,
+          nearAuthentication: req.nearAuthentication,
+          contract: req.chainConfig.contract,
+          relayerUrl: req.fastAuthRelayerUrl,
+        }),
     })
 
     const res = await evm.handleTransaction(
@@ -48,7 +56,14 @@ export const signAndSendBTCTransaction = async (
   try {
     const btc = new Bitcoin({
       ...req.chainConfig,
-      relayerUrl: req.fastAuthRelayerUrl,
+      signer: async (txHash) =>
+        await ChainSignaturesContract.sign({
+          hashedTx: txHash,
+          path: req.derivationPath,
+          nearAuthentication: req.nearAuthentication,
+          contract: req.chainConfig.contract,
+          relayerUrl: req.fastAuthRelayerUrl,
+        }),
     })
 
     const txid = await btc.handleTransaction(
@@ -72,12 +87,18 @@ export const signAndSendBTCTransaction = async (
 export const signAndSendCosmosTransaction = async (
   req: CosmosRequest
 ): Promise<Response> => {
-  console.log('signAndSendCosmosTransaction', req)
   try {
     const cosmos = new Cosmos({
       contract: req.chainConfig.contract,
       chainId: req.chainConfig.chainId,
-      relayerUrl: req.fastAuthRelayerUrl,
+      signer: async (txHash) =>
+        await ChainSignaturesContract.sign({
+          hashedTx: txHash,
+          path: req.derivationPath,
+          nearAuthentication: req.nearAuthentication,
+          contract: req.chainConfig.contract,
+          relayerUrl: req.fastAuthRelayerUrl,
+        }),
     })
 
     const txHash = await cosmos.handleTransaction(
