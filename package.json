@@ -2,7 +2,8 @@
   "name": "multichain-tools",
   "version": "2.0.18",
   "description": "",
-  "main": "./src/index.ts",
+  "main": "index.js",
+  "typings": "index.d.ts",  
   "scripts": {
     "build": "tsc --project tsconfig.json",
     "pre:deploy": "npm run build && cp package.json README.md dist/",
