@@ -27,6 +27,7 @@ export class Cosmos {
   private readonly contract: ChainSignatureContracts
   private readonly chainId: CosmosNetworkIds
   private readonly signer: (txHash: Uint8Array) => Promise<MPCSignature>
+  // TODO: should include providerUrl, so the user can choose rpc
 
   constructor({
     contract,

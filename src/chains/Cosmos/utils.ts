@@ -10,12 +10,6 @@ import { type CosmosPublicKeyAndAddressRequest } from './types'
 import axios from 'axios'
 import { chains } from 'chain-registry'
 
-/**
- * Fetches the derived Cosmos address and public key for a given signer ID and derivation path.
- *
- * @param {CosmosPublicKeyAndAddressRequest} params - The parameters for the request.
- * @returns {Promise<{ address: string; publicKey: Uint8Array }>} The derived address and public key.
- */
 export async function fetchDerivedCosmosAddressAndPublicKey({
   signerId,
   path,
@@ -48,13 +42,6 @@ export async function fetchDerivedCosmosAddressAndPublicKey({
   return { address, publicKey: Buffer.from(publicKey) }
 }
 
-/**
- * Converts a public key to a Cosmos address.
- *
- * @param {Uint8Array} pubkey - The public key.
- * @param {string} prefix - The Bech32 prefix for the network.
- * @returns {string} The Cosmos address.
- */
 function pubkeyToAddress(pubkey: Uint8Array, prefix: string): string {
   const pubkeyRaw =
     pubkey.length === 33 ? pubkey : Secp256k1.compressPubkey(pubkey)

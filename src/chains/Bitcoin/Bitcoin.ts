@@ -115,7 +115,7 @@ export class Bitcoin {
       }
       throw new Error(`Failed to broadcast transaction: ${response.data}`)
     } catch (error: unknown) {
-      console.log(error)
+      console.error(error)
       throw new Error(`Error broadcasting transaction`)
     }
   }
@@ -182,7 +182,7 @@ export class Bitcoin {
       }
     })
 
-    const mpcKeyPair = {
+    const keyPair = {
       publicKey,
       sign: async (hash: Buffer): Promise<Buffer> => {
         const mpcSignature = await this.signer(hash)
@@ -190,9 +190,9 @@ export class Bitcoin {
       },
     }
 
-    // Sign inputs sequentially
+    // Sign inputs sequentially to avoid nonce issues
     for (let index = 0; index < inputs.length; index += 1) {
-      await psbt.signInputAsync(index, mpcKeyPair)
+      await psbt.signInputAsync(index, keyPair)
     }
 
     psbt.finalizeAllInputs()
