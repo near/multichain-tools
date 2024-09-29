@@ -5,13 +5,14 @@ import { fetchDerivedEVMAddress, fetchEVMFeeProperties } from './utils'
 import { type ChainSignatureContracts, type NearAuthentication } from '../types'
 import { type EVMTransaction } from './types'
 import { type KeyDerivationPath } from '../../kdf/types'
+import { toRSV } from '../../signature/utils'
+import { type MPCSignature, type RSVSignature } from '../../signature/types'
 
 class EVM {
   private readonly provider: ethers.JsonRpcProvider
-
   private readonly relayerUrl?: string
-
   private readonly contract: ChainSignatureContracts
+  private readonly signer?: (hashedTx: Uint8Array) => Promise<MPCSignature>
 
   /**
    * Constructs an instance of the EVM class with specified configuration.
@@ -25,10 +26,12 @@ class EVM {
     providerUrl: string
     relayerUrl?: string
     contract: ChainSignatureContracts
+    signer?: (hashedTx: Uint8Array) => Promise<MPCSignature>
   }) {
     this.provider = new ethers.JsonRpcProvider(config.providerUrl)
     this.relayerUrl = config.relayerUrl
     this.contract = config.contract
+    this.signer = config.signer
   }
 
   /**
@@ -131,6 +134,35 @@ class EVM {
     }
   }
 
+  private async signTransaction(
+    hashedTx: Uint8Array,
+    path: KeyDerivationPath,
+    nearAuthentication: NearAuthentication
+  ): Promise<RSVSignature> {
+    if (this.signer) {
+      const mpcSignature = await this.signer(hashedTx)
+      return toRSV(mpcSignature)
+    } else {
+      const mpcSignature = await ChainSignaturesContract.sign({
+        hashedTx,
+        path,
+        nearAuthentication,
+        contract: this.contract,
+        relayerUrl: this.relayerUrl,
+      })
+
+      return toRSV(mpcSignature)
+    }
+  }
+
+  parseRSVSignature(rsvSignature: RSVSignature): ethers.Signature {
+    const r = `0x${rsvSignature.r}`
+    const s = `0x${rsvSignature.s}`
+    const v = rsvSignature.v
+
+    return ethers.Signature.from({ r, s, v })
+  }
+
   /**
    * Manages the lifecycle of an EVM transaction, encompassing preparation, signing, and broadcasting. This method calculates gas and nonce, digitally signs the transaction using on-chain mechanisms, and broadcasts it for execution.
    *
@@ -168,26 +200,16 @@ class EVM {
 
     const transactionHash = EVM.prepareTransactionForSignature(transaction)
 
-    const mpcPayload = ChainSignaturesContract.createSignPayload({
-      hashedTx: transactionHash,
+    const mpcSignature = await this.signTransaction(
+      Buffer.from(transactionHash),
       path,
-    })
+      nearAuthentication
+    )
 
-    const signature = await ChainSignaturesContract.sign({
-      mpcPayload,
-      nearAuthentication,
-      contract: this.contract,
-      relayerUrl: this.relayerUrl,
-    })
-
-    if (signature) {
-      const r = `0x${signature.r}`
-      const s = `0x${signature.s}`
-      const v = signature.v
-
+    if (mpcSignature) {
       const transactionResponse = await this.sendSignedTransaction(
         transaction,
-        ethers.Signature.from({ r, s, v })
+        this.parseRSVSignature(mpcSignature)
       )
       return transactionResponse
     }

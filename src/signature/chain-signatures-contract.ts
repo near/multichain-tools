@@ -1,10 +1,10 @@
 import { type Account, Contract } from '@near-js/accounts'
 import { actionCreators } from '@near-js/transactions'
-import { getNearAccount, NEAR_MAX_GAS, toRSV } from './utils'
+import { getNearAccount, NEAR_MAX_GAS } from './utils'
 import BN from 'bn.js'
 import { ethers } from 'ethers'
 
-import { type RSVSignature, type MPCSignature } from './types'
+import { type MPCSignature } from './types'
 import {
   type NearNetworkIds,
   type ChainSignatureContracts,
@@ -80,36 +80,30 @@ export const ChainSignaturesContract = {
     )
   },
 
-  createSignPayload: ({
+  sign: async ({
     hashedTx,
     path,
-  }: {
-    hashedTx: ethers.BytesLike
-    path: KeyDerivationPath
-  }): SignArgs => {
-    return {
-      payload: Array.from(ethers.getBytes(hashedTx)),
-      path: getCanonicalizedDerivationPath(path),
-      key_version: 0,
-    }
-  },
-
-  sign: async ({
-    mpcPayload,
     nearAuthentication,
     contract,
     relayerUrl,
   }: {
-    mpcPayload: SignArgs
+    hashedTx: ethers.BytesLike
+    path: KeyDerivationPath
     nearAuthentication: NearAuthentication
     contract: ChainSignatureContracts
     relayerUrl?: string
-  }): Promise<RSVSignature> => {
+  }): Promise<MPCSignature> => {
     const account = await getNearAccount({
       networkId: nearAuthentication.networkId,
       accountId: nearAuthentication.accountId,
       keypair: nearAuthentication.keypair,
     })
+
+    const mpcPayload = {
+      payload: Array.from(ethers.getBytes(hashedTx)),
+      path: getCanonicalizedDerivationPath(path),
+      key_version: 0,
+    }
 
     const deposit =
       nearAuthentication.deposit ??
@@ -151,7 +145,7 @@ const signDirect = async ({
   contract: ChainSignatureContracts
   signArgs: SignArgs
   deposit: BN
-}): Promise<RSVSignature> => {
+}): Promise<MPCSignature> => {
   const chainSignaturesContract = ChainSignaturesContract.getContract({
     account,
     contract,
@@ -163,7 +157,7 @@ const signDirect = async ({
     amount: deposit,
   })
 
-  return toRSV(signature)
+  return signature
 }
 
 const signWithRelayer = async ({
@@ -178,7 +172,7 @@ const signWithRelayer = async ({
   signArgs: SignArgs
   deposit: BN
   relayerUrl: string
-}): Promise<RSVSignature> => {
+}): Promise<MPCSignature> => {
   const functionCall = actionCreators.functionCall(
     'sign',
     { request: signArgs },
@@ -234,7 +228,7 @@ const signWithRelayer = async ({
     const parsedJSONSignature = JSON.parse(signature) as {
       Ok: MPCSignature
     }
-    return toRSV(parsedJSONSignature.Ok)
+    return parsedJSONSignature.Ok
   }
   throw new Error('Signature error, please retry')
 }

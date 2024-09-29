@@ -17,26 +17,28 @@ import {
   type BTCOutput,
   type Transaction,
 } from './types'
+import { toRSV } from '../../signature/utils'
+import { type RSVSignature, type MPCSignature } from '../../signature/types'
 
 export class Bitcoin {
   private readonly network: BTCNetworkIds
-
   private readonly providerUrl: string
-
   private readonly relayerUrl?: string
-
   private readonly contract: ChainSignatureContracts
+  private readonly signer?: (txHash: Uint8Array) => Promise<MPCSignature>
 
   constructor(config: {
     network: BTCNetworkIds
     providerUrl: string
     relayerUrl?: string
     contract: ChainSignatureContracts
+    signer?: (txHash: Uint8Array) => Promise<MPCSignature>
   }) {
     this.network = config.network
     this.providerUrl = config.providerUrl
     this.relayerUrl = config.relayerUrl
     this.contract = config.contract
+    this.signer = config.signer
   }
 
   static toBTC(satoshis: number): number {
@@ -100,16 +102,7 @@ export class Bitcoin {
     return tx
   }
 
-  /**
-   * Joins the r and s components of a signature into a single Buffer.
-   *
-   * @param {Object} signature - An object containing the r and s components of a signature.
-   * @param {string} signature.r - The r component of the signature.
-   * @param {string} signature.s - The s component of the signature.
-   * @returns {Buffer} A Buffer representing the concatenated r and s components of the signature.
-   * @throws {Error} Throws an error if the resulting Buffer is not exactly 64 bytes long.
-   */
-  static joinSignature(signature: { r: string; s: string }): Buffer {
+  static parseRSVSignature(signature: RSVSignature): Buffer {
     const r = signature.r.padStart(64, '0')
     const s = signature.s.padStart(64, '0')
 
@@ -148,6 +141,27 @@ export class Bitcoin {
     } catch (error: unknown) {
       console.log(error)
       throw new Error(`Error broadcasting transaction`)
+    }
+  }
+
+  private async signTransaction(
+    hashedTx: Uint8Array,
+    path: KeyDerivationPath,
+    nearAuthentication: NearAuthentication
+  ): Promise<RSVSignature> {
+    if (this.signer) {
+      const mpcSignature = await this.signer(hashedTx)
+      return toRSV(mpcSignature)
+    } else {
+      const mpcSignature = await ChainSignaturesContract.sign({
+        hashedTx,
+        path,
+        nearAuthentication,
+        contract: this.contract,
+        relayerUrl: this.relayerUrl,
+      })
+
+      return toRSV(mpcSignature)
     }
   }
 
@@ -226,23 +240,13 @@ export class Bitcoin {
     const mpcKeyPair = {
       publicKey,
       sign: async (hash: Buffer): Promise<Buffer> => {
-        const mpcPayload = ChainSignaturesContract.createSignPayload({
-          hashedTx: hash,
+        const rsvSignature = await this.signTransaction(
+          hash,
           path,
-        })
+          nearAuthentication
+        )
 
-        const signature = await ChainSignaturesContract.sign({
-          mpcPayload,
-          nearAuthentication,
-          contract: this.contract,
-          relayerUrl: this.relayerUrl,
-        })
-
-        if (!signature) {
-          throw new Error('Failed to sign transaction')
-        }
-
-        return Bitcoin.joinSignature(signature)
+        return Bitcoin.parseRSVSignature(rsvSignature)
       },
     }
 
