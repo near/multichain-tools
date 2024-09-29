@@ -1,7 +1,6 @@
 import axios from 'axios'
 import * as bitcoin from 'bitcoinjs-lib'
 
-import { ChainSignaturesContract } from '../../signature'
 import {
   fetchBTCFeeProperties,
   fetchBTCUTXOs,
@@ -23,20 +22,17 @@ import { type RSVSignature, type MPCSignature } from '../../signature/types'
 export class Bitcoin {
   private readonly network: BTCNetworkIds
   private readonly providerUrl: string
-  private readonly relayerUrl?: string
   private readonly contract: ChainSignatureContracts
-  private readonly signer?: (txHash: Uint8Array) => Promise<MPCSignature>
+  private readonly signer: (txHash: Uint8Array) => Promise<MPCSignature>
 
   constructor(config: {
     network: BTCNetworkIds
     providerUrl: string
-    relayerUrl?: string
     contract: ChainSignatureContracts
-    signer?: (txHash: Uint8Array) => Promise<MPCSignature>
+    signer: (txHash: Uint8Array) => Promise<MPCSignature>
   }) {
     this.network = config.network
     this.providerUrl = config.providerUrl
-    this.relayerUrl = config.relayerUrl
     this.contract = config.contract
     this.signer = config.signer
   }
@@ -144,27 +140,6 @@ export class Bitcoin {
     }
   }
 
-  private async signTransaction(
-    hashedTx: Uint8Array,
-    path: KeyDerivationPath,
-    nearAuthentication: NearAuthentication
-  ): Promise<RSVSignature> {
-    if (this.signer) {
-      const mpcSignature = await this.signer(hashedTx)
-      return toRSV(mpcSignature)
-    } else {
-      const mpcSignature = await ChainSignaturesContract.sign({
-        hashedTx,
-        path,
-        nearAuthentication,
-        contract: this.contract,
-        relayerUrl: this.relayerUrl,
-      })
-
-      return toRSV(mpcSignature)
-    }
-  }
-
   /**
    * Handles the process of creating and broadcasting a Bitcoin transaction.
    *
@@ -240,12 +215,8 @@ export class Bitcoin {
     const mpcKeyPair = {
       publicKey,
       sign: async (hash: Buffer): Promise<Buffer> => {
-        const rsvSignature = await this.signTransaction(
-          hash,
-          path,
-          nearAuthentication
-        )
-
+        const mpcSignature = await this.signer(hash)
+        const rsvSignature = toRSV(mpcSignature)
         return Bitcoin.parseRSVSignature(rsvSignature)
       },
     }

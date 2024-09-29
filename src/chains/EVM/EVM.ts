@@ -1,6 +1,5 @@
 import { ethers, keccak256 } from 'ethers'
 
-import { ChainSignaturesContract } from '../../signature'
 import { fetchDerivedEVMAddress, fetchEVMFeeProperties } from './utils'
 import { type ChainSignatureContracts, type NearAuthentication } from '../types'
 import { type EVMTransaction } from './types'
@@ -10,26 +9,22 @@ import { type MPCSignature, type RSVSignature } from '../../signature/types'
 
 class EVM {
   private readonly provider: ethers.JsonRpcProvider
-  private readonly relayerUrl?: string
   private readonly contract: ChainSignatureContracts
-  private readonly signer?: (hashedTx: Uint8Array) => Promise<MPCSignature>
+  private readonly signer: (hashedTx: Uint8Array) => Promise<MPCSignature>
 
   /**
    * Constructs an instance of the EVM class with specified configuration.
    *
    * @param {Object} config - The configuration object for the EVM instance.
    * @param {string} config.providerUrl - The URL of the Ethereum JSON RPC provider.
-   * @param {string} config.relayerUrl - The URL of the relayer service.
    * @param {ChainSignatureContracts} config.contract - The contract identifier for chain signature operations.
    */
   constructor(config: {
     providerUrl: string
-    relayerUrl?: string
     contract: ChainSignatureContracts
-    signer?: (hashedTx: Uint8Array) => Promise<MPCSignature>
+    signer: (hashedTx: Uint8Array) => Promise<MPCSignature>
   }) {
     this.provider = new ethers.JsonRpcProvider(config.providerUrl)
-    this.relayerUrl = config.relayerUrl
     this.contract = config.contract
     this.signer = config.signer
   }
@@ -42,12 +37,12 @@ class EVM {
    */
   static prepareTransactionForSignature(
     transaction: ethers.TransactionLike
-  ): string {
+  ): Uint8Array {
     const serializedTransaction =
       ethers.Transaction.from(transaction).unsignedSerialized
     const transactionHash = keccak256(serializedTransaction)
 
-    return transactionHash
+    return new Uint8Array(ethers.getBytes(transactionHash))
   }
 
   /**
@@ -134,27 +129,6 @@ class EVM {
     }
   }
 
-  private async signTransaction(
-    hashedTx: Uint8Array,
-    path: KeyDerivationPath,
-    nearAuthentication: NearAuthentication
-  ): Promise<RSVSignature> {
-    if (this.signer) {
-      const mpcSignature = await this.signer(hashedTx)
-      return toRSV(mpcSignature)
-    } else {
-      const mpcSignature = await ChainSignaturesContract.sign({
-        hashedTx,
-        path,
-        nearAuthentication,
-        contract: this.contract,
-        relayerUrl: this.relayerUrl,
-      })
-
-      return toRSV(mpcSignature)
-    }
-  }
-
   parseRSVSignature(rsvSignature: RSVSignature): ethers.Signature {
     const r = `0x${rsvSignature.r}`
     const s = `0x${rsvSignature.s}`
@@ -199,17 +173,13 @@ class EVM {
     })
 
     const transactionHash = EVM.prepareTransactionForSignature(transaction)
-
-    const mpcSignature = await this.signTransaction(
-      Buffer.from(transactionHash),
-      path,
-      nearAuthentication
-    )
+    const mpcSignature = await this.signer(transactionHash)
+    const rsvSignature = toRSV(mpcSignature)
 
     if (mpcSignature) {
       const transactionResponse = await this.sendSignedTransaction(
         transaction,
-        this.parseRSVSignature(mpcSignature)
+        this.parseRSVSignature(rsvSignature)
       )
       return transactionResponse
     }

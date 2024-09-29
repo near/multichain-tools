@@ -87,7 +87,7 @@ export const ChainSignaturesContract = {
     contract,
     relayerUrl,
   }: {
-    hashedTx: ethers.BytesLike
+    hashedTx: Uint8Array
     path: KeyDerivationPath
     nearAuthentication: NearAuthentication
     contract: ChainSignatureContracts
