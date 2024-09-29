@@ -3,7 +3,7 @@ import BN from 'bn.js'
 
 import { Account, Connection } from '@near-js/accounts'
 import { InMemoryKeyStore } from '@near-js/keystores'
-import { KeyPair } from 'near-api-js'
+import { KeyPair } from '@near-js/crypto'
 
 export const NEAR_MAX_GAS = new BN('300000000000000')
 

@@ -1,5 +1,5 @@
 import { type Account, Contract } from '@near-js/accounts'
-import { actionCreators } from '@near-js/transactions'
+import { actionCreators, type SignedDelegate } from '@near-js/transactions'
 import { getNearAccount, NEAR_MAX_GAS, toRSV } from './utils'
 import BN from 'bn.js'
 import { ethers } from 'ethers'
@@ -47,7 +47,7 @@ export const ChainSignaturesContract = {
       viewMethods: ['public_key', 'experimental_signature_deposit'],
       changeMethods: ['sign'],
       useLocalViewExecution: false,
-    })
+    }) as unknown as MultiChainContract
   },
 
   sign: async ({
@@ -164,15 +164,16 @@ const signWithRelayer = async (
   const functionCall = actionCreators.functionCall(
     'sign',
     { request: signArgs },
-    NEAR_MAX_GAS,
-    deposit
+    BigInt(NEAR_MAX_GAS.toString()),
+    BigInt(deposit.toString())
   )
 
-  const signedDelegate = await account.signedDelegate({
+  const signedDelegate = (await account.signedDelegate({
     receiverId: contract,
     actions: [functionCall],
     blockHeightTtl: 60,
-  })
+  })) as SignedDelegate
+
   // Remove the cached access key to prevent nonce reuse
   delete account.accessKeyByPublicKeyCache[
     // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
@@ -191,7 +192,8 @@ const signWithRelayer = async (
   const txHash = await res.text()
   const txStatus = await account.connection.provider.txStatus(
     txHash,
-    account.accountId
+    account.accountId,
+    'FINAL'
   )
 
   const signature: string = txStatus.receipts_outcome.reduce<string>(
