@@ -39,22 +39,10 @@ export class Bitcoin {
     this.contract = config.contract
   }
 
-  /**
-   * Converts a value from satoshis to bitcoins.
-   *
-   * @param {number} satoshis - The amount in satoshis to convert.
-   * @returns {number} The equivalent amount in bitcoins.
-   */
   static toBTC(satoshis: number): number {
     return satoshis / 100000000
   }
 
-  /**
-   * Converts a value from bitcoins to satoshis.
-   *
-   * @param {number} btc - The amount in bitcoins to convert.
-   * @returns {number} The equivalent amount in satoshis.
-   */
   static toSatoshi(btc: number): number {
     return Math.round(btc * 100000000)
   }
@@ -238,9 +226,13 @@ export class Bitcoin {
     const mpcKeyPair = {
       publicKey,
       sign: async (hash: Buffer): Promise<Buffer> => {
-        const signature = await ChainSignaturesContract.sign({
-          transactionHash: hash,
+        const mpcPayload = ChainSignaturesContract.createSignPayload({
+          hashedTx: hash,
           path,
+        })
+
+        const signature = await ChainSignaturesContract.sign({
+          mpcPayload,
           nearAuthentication,
           contract: this.contract,
           relayerUrl: this.relayerUrl,

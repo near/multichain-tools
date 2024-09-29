@@ -168,9 +168,13 @@ class EVM {
 
     const transactionHash = EVM.prepareTransactionForSignature(transaction)
 
-    const signature = await ChainSignaturesContract.sign({
-      transactionHash,
+    const mpcPayload = ChainSignaturesContract.createSignPayload({
+      hashedTx: transactionHash,
       path,
+    })
+
+    const signature = await ChainSignaturesContract.sign({
+      mpcPayload,
       nearAuthentication,
       contract: this.contract,
       relayerUrl: this.relayerUrl,

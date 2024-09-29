@@ -82,10 +82,10 @@ export async function fetchDerivedEVMAddress({
   nearNetworkId,
   multichainContractId,
 }: FetchEVMAddressRequest): Promise<string> {
-  const contractRootPublicKey = await ChainSignaturesContract.getRootPublicKey(
-    multichainContractId,
-    nearNetworkId
-  )
+  const contractRootPublicKey = await ChainSignaturesContract.getPublicKey({
+    networkId: nearNetworkId,
+    contract: multichainContractId,
+  })
 
   if (!contractRootPublicKey) {
     throw new Error('Failed to fetch root public key')

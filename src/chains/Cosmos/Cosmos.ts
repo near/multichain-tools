@@ -120,18 +120,19 @@ export class Cosmos {
     path: KeyDerivationPath,
     nearAuthentication: NearAuthentication
   ): Promise<Uint8Array> {
-    const signatureResponse = await ChainSignaturesContract.sign({
-      transactionHash: sha256(signBytes),
+    const mpcPayload = ChainSignaturesContract.createSignPayload({
+      hashedTx: sha256(signBytes),
       path,
+    })
+
+    const signature = await ChainSignaturesContract.sign({
+      mpcPayload,
       nearAuthentication,
       contract: this.contract,
       relayerUrl: this.relayerUrl,
     })
 
-    return new Uint8Array([
-      ...fromHex(signatureResponse.r),
-      ...fromHex(signatureResponse.s),
-    ])
+    return new Uint8Array([...fromHex(signature.r), ...fromHex(signature.s)])
   }
 
   private createFee(denom: string, gasPrice: number, gas?: number): StdFee {

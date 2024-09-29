@@ -1,11 +1,12 @@
 import { type Account, Contract } from '@near-js/accounts'
-import { actionCreators, type SignedDelegate } from '@near-js/transactions'
+import { actionCreators } from '@near-js/transactions'
 import { getNearAccount, NEAR_MAX_GAS, toRSV } from './utils'
 import BN from 'bn.js'
 import { ethers } from 'ethers'
 
 import { type RSVSignature, type MPCSignature } from './types'
 import {
+  type NearNetworkIds,
   type ChainSignatureContracts,
   type NearAuthentication,
 } from '../chains/types'
@@ -30,19 +31,14 @@ type MultiChainContract = Contract & {
   experimental_signature_deposit: () => Promise<number>
 }
 
-interface SignParams {
-  transactionHash: string | ethers.BytesLike
-  path: KeyDerivationPath
-  nearAuthentication: NearAuthentication
-  contract: ChainSignatureContracts
-  relayerUrl?: string
-}
-
 export const ChainSignaturesContract = {
-  getContract: (
-    account: Account,
+  getContract: ({
+    account,
+    contract,
+  }: {
+    account: Account
     contract: ChainSignatureContracts
-  ): MultiChainContract => {
+  }): MultiChainContract => {
     return new Contract(account, contract, {
       viewMethods: ['public_key', 'experimental_signature_deposit'],
       changeMethods: ['sign'],
@@ -50,117 +46,139 @@ export const ChainSignaturesContract = {
     }) as unknown as MultiChainContract
   },
 
-  sign: async ({
-    transactionHash,
+  getPublicKey: async ({
+    networkId,
+    contract,
+  }: {
+    networkId: NearNetworkIds
+    contract: ChainSignatureContracts
+  }): Promise<string | undefined> => {
+    const nearAccount = await getNearAccount({ networkId })
+    const chainSignaturesContract = ChainSignaturesContract.getContract({
+      account: nearAccount,
+      contract,
+    })
+    return await chainSignaturesContract.public_key()
+  },
+
+  getCurrentFee: async ({
+    networkId,
+    contract,
+  }: {
+    networkId: NearNetworkIds
+    contract: ChainSignatureContracts
+  }): Promise<BN | undefined> => {
+    const nearAccount = await getNearAccount({ networkId })
+    const chainSignaturesContract = ChainSignaturesContract.getContract({
+      account: nearAccount,
+      contract,
+    })
+    return new BN(
+      (
+        await chainSignaturesContract.experimental_signature_deposit()
+      ).toLocaleString('fullwide', { useGrouping: false })
+    )
+  },
+
+  createSignPayload: ({
+    hashedTx,
     path,
+  }: {
+    hashedTx: ethers.BytesLike
+    path: KeyDerivationPath
+  }): SignArgs => {
+    return {
+      payload: Array.from(ethers.getBytes(hashedTx)),
+      path: getCanonicalizedDerivationPath(path),
+      key_version: 0,
+    }
+  },
+
+  sign: async ({
+    mpcPayload,
     nearAuthentication,
     contract,
     relayerUrl,
-  }: SignParams): Promise<RSVSignature> => {
+  }: {
+    mpcPayload: SignArgs
+    nearAuthentication: NearAuthentication
+    contract: ChainSignatureContracts
+    relayerUrl?: string
+  }): Promise<RSVSignature> => {
     const account = await getNearAccount({
       networkId: nearAuthentication.networkId,
       accountId: nearAuthentication.accountId,
       keypair: nearAuthentication.keypair,
     })
 
-    const payload = Array.from(ethers.getBytes(transactionHash))
-
-    const signArgs = {
-      payload,
-      path: getCanonicalizedDerivationPath(path),
-      key_version: 0,
-    }
-
     const deposit =
       nearAuthentication.deposit ??
-      BN.max(
-        new BN(1),
-        new BN(
-          (await ChainSignaturesContract.getExperimentalSignatureDeposit(
-            contract,
-            nearAuthentication.networkId
-          )) || '1'
-        )
-      )
+      (await ChainSignaturesContract.getCurrentFee({
+        networkId: nearAuthentication.networkId,
+        contract,
+      })) ??
+      new BN(1)
 
     try {
       return relayerUrl
-        ? await signWithRelayer(
+        ? await signWithRelayer({
             account,
             contract,
-            signArgs,
+            signArgs: mpcPayload,
             deposit,
-            relayerUrl
-          )
-        : await signDirect(account, contract, signArgs, deposit)
+            relayerUrl,
+          })
+        : await signDirect({
+            account,
+            contract,
+            signArgs: mpcPayload,
+            deposit,
+          })
     } catch (e) {
       console.error(e)
       throw new Error('Signature error, please retry')
     }
   },
-
-  getRootPublicKey: async (
-    contract: ChainSignatureContracts,
-    nearNetworkId: string
-  ): Promise<string | undefined> => {
-    const nearAccount = await getNearAccount({
-      networkId: nearNetworkId,
-    })
-
-    const chainSignaturesContract = ChainSignaturesContract.getContract(
-      nearAccount,
-      contract
-    )
-
-    return chainSignaturesContract.public_key()
-  },
-
-  getExperimentalSignatureDeposit: async (
-    contract: ChainSignatureContracts,
-    nearNetworkId: string
-  ): Promise<string | undefined> => {
-    const nearAccount = await getNearAccount({
-      networkId: nearNetworkId,
-    })
-
-    const chainSignaturesContract = ChainSignaturesContract.getContract(
-      nearAccount,
-      contract
-    )
-
-    return (
-      await chainSignaturesContract.experimental_signature_deposit()
-    ).toLocaleString('fullwide', { useGrouping: false })
-  },
 }
 
-const signDirect = async (
-  account: Account,
-  contract: ChainSignatureContracts,
-  signArgs: SignArgs,
+const signDirect = async ({
+  account,
+  contract,
+  signArgs,
+  deposit,
+}: {
+  account: Account
+  contract: ChainSignatureContracts
+  signArgs: SignArgs
   deposit: BN
-): Promise<RSVSignature> => {
-  const chainSignaturesContract = ChainSignaturesContract.getContract(
+}): Promise<RSVSignature> => {
+  const chainSignaturesContract = ChainSignaturesContract.getContract({
     account,
-    contract
-  )
+    contract,
+  })
 
-  const signature = (await chainSignaturesContract.sign({
+  const signature = await chainSignaturesContract.sign({
     args: { request: signArgs },
     gas: NEAR_MAX_GAS,
     amount: deposit,
-  })) as MPCSignature
+  })
 
   return toRSV(signature)
 }
 
-const signWithRelayer = async (
-  account: Account,
-  contract: ChainSignatureContracts,
-  signArgs: SignArgs,
-  deposit: BN,
+const signWithRelayer = async ({
+  account,
+  contract,
+  signArgs,
+  deposit,
+  relayerUrl,
+}: {
+  account: Account
+  contract: ChainSignatureContracts
+  signArgs: SignArgs
+  deposit: BN
   relayerUrl: string
-): Promise<RSVSignature> => {
+}): Promise<RSVSignature> => {
   const functionCall = actionCreators.functionCall(
     'sign',
     { request: signArgs },
@@ -168,11 +186,11 @@ const signWithRelayer = async (
     BigInt(deposit.toString())
   )
 
-  const signedDelegate = (await account.signedDelegate({
+  const signedDelegate = await account.signedDelegate({
     receiverId: contract,
     actions: [functionCall],
     blockHeightTtl: 60,
-  })) as SignedDelegate
+  })
 
   // Remove the cached access key to prevent nonce reuse
   delete account.accessKeyByPublicKeyCache[

@@ -23,12 +23,12 @@ export async function fetchDerivedCosmosAddressAndPublicKey({
   prefix,
 }: CosmosPublicKeyAndAddressRequest): Promise<{
   address: string
-  publicKey: Uint8Array
+  publicKey: Buffer
 }> {
-  const contractRootPublicKey = await ChainSignaturesContract.getRootPublicKey(
-    multichainContractId,
-    nearNetworkId
-  )
+  const contractRootPublicKey = await ChainSignaturesContract.getPublicKey({
+    networkId: nearNetworkId,
+    contract: multichainContractId,
+  })
 
   if (!contractRootPublicKey) {
     throw new Error('Failed to fetch root public key')
@@ -44,7 +44,7 @@ export async function fetchDerivedCosmosAddressAndPublicKey({
 
   const address = pubkeyToAddress(publicKey, prefix)
 
-  return { address, publicKey }
+  return { address, publicKey: Buffer.from(publicKey) }
 }
 
 /**
