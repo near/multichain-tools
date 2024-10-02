@@ -33,26 +33,6 @@ export async function fetchEVMFeeProperties(
   }
 }
 
-export const generateEthereumAddress = async (
-  signerId: string,
-  path: string,
-  publicKey: string
-): Promise<string> => {
-  const uncompressedHexPoint = najPublicKeyStrToUncompressedHexPoint(publicKey)
-  const childPublicKey = await deriveChildPublicKey(
-    uncompressedHexPoint,
-    signerId,
-    path
-  )
-  const publicKeyNoPrefix = childPublicKey.startsWith('04')
-    ? childPublicKey.substring(2)
-    : childPublicKey
-
-  const hash = ethers.keccak256(Buffer.from(publicKeyNoPrefix, 'hex'))
-
-  return `0x${hash.substring(hash.length - 40)}`
-}
-
 export async function fetchDerivedEVMAddress({
   signerId,
   path,
@@ -68,9 +48,20 @@ export async function fetchDerivedEVMAddress({
     throw new Error('Failed to fetch root public key')
   }
 
-  return await generateEthereumAddress(
-    signerId,
-    getCanonicalizedDerivationPath(path),
+  const uncompressedHexPoint = najPublicKeyStrToUncompressedHexPoint(
     contractRootPublicKey
   )
+  const childPublicKey = await deriveChildPublicKey(
+    uncompressedHexPoint,
+    signerId,
+    getCanonicalizedDerivationPath(path)
+  )
+
+  const publicKeyNoPrefix = childPublicKey.startsWith('04')
+    ? childPublicKey.substring(2)
+    : childPublicKey
+
+  const hash = ethers.keccak256(Buffer.from(publicKeyNoPrefix, 'hex'))
+
+  return `0x${hash.substring(hash.length - 40)}`
 }
