@@ -39,7 +39,6 @@ export async function fetchBTCUTXOs(
         txid: utxo.txid,
         vout: utxo.vout,
         value: utxo.value,
-        script: utxo.script,
       }
     })
     return utxos
