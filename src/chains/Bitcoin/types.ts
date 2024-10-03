@@ -50,7 +50,6 @@ export interface UTXO {
   txid: string
   vout: number
   value: number
-  script: string
 }
 
 export type BTCOutput =

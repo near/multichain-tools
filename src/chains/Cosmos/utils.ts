@@ -5,10 +5,9 @@ import { bech32 } from 'bech32'
 import { ChainSignaturesContract } from '../../signature'
 import { generateCompressedPublicKey } from '../../kdf/kdf'
 import { getCanonicalizedDerivationPath } from '../../kdf/utils'
-
 import { type CosmosPublicKeyAndAddressRequest } from './types'
-import axios from 'axios'
 import { chains } from 'chain-registry'
+import { StargateClient } from '@cosmjs/stargate'
 
 export async function fetchDerivedCosmosAddressAndPublicKey({
   signerId,
@@ -94,17 +93,11 @@ export async function fetchCosmosBalance(
 ): Promise<string> {
   try {
     const { restUrl, denom } = await fetchChainInfo(chainId)
-    const balanceUrl = `${restUrl}/cosmos/bank/v1beta1/balances/${address}`
-    const response = await axios.get(balanceUrl)
+    const client = await StargateClient.connect(restUrl)
 
-    const balances = response.data.balances
-    const balance = balances.find((b: any) => b.denom === denom)
+    const balance = await client.getBalance(address, denom)
 
-    if (balance) {
-      return balance.amount
-    } else {
-      return '0'
-    }
+    return balance.amount
   } catch (error) {
     console.error('Failed to fetch Cosmos balance:', error)
     throw new Error('Failed to fetch Cosmos balance')
