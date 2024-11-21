@@ -12,8 +12,8 @@ import {
   type UTXO,
 } from './types'
 import { getCanonicalizedDerivationPath } from '../../kdf/utils'
-import { generateCompressedPublicKey } from '../../kdf/kdf'
-import { ChainSignaturesContract } from '../../signature'
+import { ChainSignaturesContract } from '../../signature/chain-signatures-contract'
+import { najToPubKey } from '../../kdf/kdf'
 
 export async function fetchBTCFeeRate(
   providerUrl: string,
@@ -83,23 +83,18 @@ export async function fetchDerivedBTCAddressAndPublicKey({
   address: string
   publicKey: Buffer
 }> {
-  const contractRootPublicKey = await ChainSignaturesContract.getPublicKey({
+  const derivedPubKeyNAJ = await ChainSignaturesContract.getDerivedPublicKey({
     networkId: nearNetworkId,
     contract: multichainContractId,
+    args: { path: getCanonicalizedDerivationPath(path), predecessor: signerId },
   })
 
-  if (!contractRootPublicKey) {
-    throw new Error('Failed to fetch root public key')
+  if (!derivedPubKeyNAJ) {
+    throw new Error('Failed to get derived public key')
   }
 
-  const derivedKey = await generateCompressedPublicKey(
-    signerId,
-    getCanonicalizedDerivationPath(path),
-    contractRootPublicKey
-  )
-
+  const derivedKey = najToPubKey(derivedPubKeyNAJ, { compress: true })
   const publicKeyBuffer = Buffer.from(derivedKey, 'hex')
-
   const network = parseBTCNetwork(btcNetworkId)
 
   // Use P2WPKH (Bech32) address type

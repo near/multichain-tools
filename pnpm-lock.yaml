@@ -62,15 +62,9 @@ importers:
       cosmjs-types:
         specifier: ^0.9.0
         version: 0.9.0
-      elliptic:
-        specifier: ^6.5.5
-        version: 6.5.7
       ethers:
         specifier: ^6.11.1
         version: 6.13.2
-      js-sha3:
-        specifier: ^0.9.3
-        version: 0.9.3
       lodash.pickby:
         specifier: ^4.6.0
         version: 4.6.0
@@ -90,9 +84,6 @@ importers:
       '@types/bn.js':
         specifier: ^5.1.5
         version: 5.1.6
-      '@types/elliptic':
-        specifier: ^6.4.18
-        version: 6.4.18
       '@types/lodash.pickby':
         specifier: ^4.6.9
         version: 4.6.9
@@ -1078,9 +1069,6 @@ packages:
   '@types/bn.js@5.1.6':
     resolution: {integrity: sha512-Xh8vSwUeMKeYYrj3cX4lGQgFSF/N03r+tv4AiLl1SucqV+uTQpxRcnM8AkXKHwYP9ZPXOYXRr2KPXpVlIvqh9w==}
 
-  '@types/elliptic@6.4.18':
-    resolution: {integrity: sha512-UseG6H5vjRiNpQvrhy4VF/JXdA3V/Fp5amvveaL+fs28BZ6xIKJBPnUPRlEaZpysD9MbpfaLi8lbl7PGUAkpWw==}
-
   '@types/graceful-fs@4.1.9':
     resolution: {integrity: sha512-olP3sd1qOEe5dXTSaFvQG+02VdRXcdytWLAZsAq1PecU8uqQAhkrnbli7DagjtXKW/Bl7YJbUsa8MPcuc8LHEQ==}
 
@@ -1606,8 +1594,8 @@ packages:
   electron-to-chromium@1.5.29:
     resolution: {integrity: sha512-PF8n2AlIhCKXQ+gTpiJi0VhcHDb69kYX4MtCiivctc2QD3XuNZ/XIOlbGzt7WAjjEev0TtaH6Cu3arZExm5DOw==}
 
-  elliptic@6.5.7:
-    resolution: {integrity: sha512-ESVCtTwiA+XhY3wyh24QqRGBoP3rEdDUl3EDUUo9tft074fi19IrdpH7hLCMMP3CIj7jb3W96rn8lt/BqIlt5Q==}
+  elliptic@6.6.1:
+    resolution: {integrity: sha512-RaddvvMatK2LJHqFJ+YA4WysVN5Ita9E35botqIYspQ4TkRAlCicdzKOjlyv/1Za5RyTNn7di//eEV0uTAfe3g==}
 
   emittery@0.13.1:
     resolution: {integrity: sha512-DeWwawk6r5yR9jFgnDKYt4sLS0LmHJJi3ZOnb5/JdbYwj3nW+FxQnHIjhBKz8YLC7oRNPVM9NQ47I3CVx34eqQ==}
@@ -2312,9 +2300,6 @@ packages:
     peerDependenciesMeta:
       node-notifier:
         optional: true
-
-  js-sha3@0.9.3:
-    resolution: {integrity: sha512-BcJPCQeLg6WjEx3FE591wVAevlli8lxsxm9/FzV4HXkV49TmBH38Yvrpce6fjbADGMKFrBMGTqrVz3qPIZ88Gg==}
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -3922,7 +3907,7 @@ snapshots:
       '@cosmjs/utils': 0.32.4
       '@noble/hashes': 1.5.0
       bn.js: 5.2.1
-      elliptic: 6.5.7
+      elliptic: 6.6.1
       libsodium-wrappers-sumo: 0.7.15
 
   '@cosmjs/encoding@0.32.4':
@@ -4489,10 +4474,6 @@ snapshots:
   '@types/bn.js@5.1.6':
     dependencies:
       '@types/node': 22.7.3
-
-  '@types/elliptic@6.4.18':
-    dependencies:
-      '@types/bn.js': 5.1.6
 
   '@types/graceful-fs@4.1.9':
     dependencies:
@@ -5082,7 +5063,7 @@ snapshots:
 
   electron-to-chromium@1.5.29: {}
 
-  elliptic@6.5.7:
+  elliptic@6.6.1:
     dependencies:
       bn.js: 4.12.0
       brorand: 1.1.0
@@ -6089,8 +6070,6 @@ snapshots:
       - supports-color
       - ts-node
 
-  js-sha3@0.9.3: {}
-
   js-tokens@4.0.0: {}
 
   js-yaml@3.14.1:
@@ -6491,7 +6470,7 @@ snapshots:
 
   secp256k1@5.0.0:
     dependencies:
-      elliptic: 6.5.7
+      elliptic: 6.6.1
       node-addon-api: 5.1.0
       node-gyp-build: 4.8.2
 

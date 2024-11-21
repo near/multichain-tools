@@ -2,12 +2,12 @@ import { fromHex } from '@cosmjs/encoding'
 import { Secp256k1, sha256, ripemd160 } from '@cosmjs/crypto'
 import { bech32 } from 'bech32'
 
-import { ChainSignaturesContract } from '../../signature'
-import { generateCompressedPublicKey } from '../../kdf/kdf'
+import { najToPubKey } from '../../kdf/kdf'
 import { getCanonicalizedDerivationPath } from '../../kdf/utils'
 import { type CosmosPublicKeyAndAddressRequest } from './types'
 import { chains } from 'chain-registry'
 import { StargateClient } from '@cosmjs/stargate'
+import { ChainSignaturesContract } from '../../signature/chain-signatures-contract'
 
 export async function fetchDerivedCosmosAddressAndPublicKey({
   signerId,
@@ -19,23 +19,18 @@ export async function fetchDerivedCosmosAddressAndPublicKey({
   address: string
   publicKey: Buffer
 }> {
-  const contractRootPublicKey = await ChainSignaturesContract.getPublicKey({
+  const derivedPubKeyNAJ = await ChainSignaturesContract.getDerivedPublicKey({
     networkId: nearNetworkId,
     contract: multichainContractId,
+    args: { path: getCanonicalizedDerivationPath(path), predecessor: signerId },
   })
 
-  if (!contractRootPublicKey) {
-    throw new Error('Failed to fetch root public key')
+  if (!derivedPubKeyNAJ) {
+    throw new Error('Failed to get derived public key')
   }
 
-  const derivedKeyHex = await generateCompressedPublicKey(
-    signerId,
-    getCanonicalizedDerivationPath(path),
-    contractRootPublicKey
-  )
-
-  const publicKey = fromHex(derivedKeyHex)
-
+  const derivedKey = najToPubKey(derivedPubKeyNAJ, { compress: true })
+  const publicKey = fromHex(derivedKey)
   const address = pubkeyToAddress(publicKey, prefix)
 
   return { address, publicKey: Buffer.from(publicKey) }

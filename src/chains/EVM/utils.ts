@@ -3,10 +3,7 @@ import { ethers } from 'ethers'
 import { ChainSignaturesContract } from '../../signature'
 import { getCanonicalizedDerivationPath } from '../../kdf/utils'
 import { type FetchEVMAddressRequest } from './types'
-import {
-  najPublicKeyStrToUncompressedHexPoint,
-  deriveChildPublicKey,
-} from '../../kdf/kdf'
+import { najToPubKey } from '../../kdf/kdf'
 
 export async function fetchEVMFeeProperties(
   providerUrl: string,
@@ -39,23 +36,17 @@ export async function fetchDerivedEVMAddress({
   nearNetworkId,
   multichainContractId,
 }: FetchEVMAddressRequest): Promise<string> {
-  const contractRootPublicKey = await ChainSignaturesContract.getPublicKey({
+  const derivedPubKeyNAJ = await ChainSignaturesContract.getDerivedPublicKey({
     networkId: nearNetworkId,
     contract: multichainContractId,
+    args: { path: getCanonicalizedDerivationPath(path), predecessor: signerId },
   })
 
-  if (!contractRootPublicKey) {
-    throw new Error('Failed to fetch root public key')
+  if (!derivedPubKeyNAJ) {
+    throw new Error('Failed to get derived public key')
   }
 
-  const uncompressedHexPoint = najPublicKeyStrToUncompressedHexPoint(
-    contractRootPublicKey
-  )
-  const childPublicKey = await deriveChildPublicKey(
-    uncompressedHexPoint,
-    signerId,
-    getCanonicalizedDerivationPath(path)
-  )
+  const childPublicKey = najToPubKey(derivedPubKeyNAJ, { compress: false })
 
   const publicKeyNoPrefix = childPublicKey.startsWith('04')
     ? childPublicKey.substring(2)
