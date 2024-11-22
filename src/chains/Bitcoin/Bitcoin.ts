@@ -128,8 +128,6 @@ export class Bitcoin {
       multichainContractId: this.contract,
     })
 
-    console.log('test')
-
     const { inputs, outputs } =
       data.inputs && data.outputs
         ? data
