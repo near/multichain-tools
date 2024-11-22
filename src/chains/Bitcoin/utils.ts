@@ -10,22 +10,28 @@ import {
   type BTCOutput,
   type BitcoinPublicKeyAndAddressRequest,
   type UTXO,
+  type BTCFeeRecommendation,
 } from './types'
 import { getCanonicalizedDerivationPath } from '../../kdf/utils'
-import { generateCompressedPublicKey } from '../../kdf/kdf'
-import { ChainSignaturesContract } from '../../signature'
+import { ChainSignaturesContract } from '../../signature/chain-signatures-contract'
+import { najToPubKey } from '../../kdf/kdf'
 
 export async function fetchBTCFeeRate(
   providerUrl: string,
   confirmationTarget = 6
 ): Promise<number> {
-  const response = await axios.get(`${providerUrl}fee-estimates`)
-  if (response.data?.[confirmationTarget]) {
-    return response.data[confirmationTarget]
-  }
-  throw new Error(
-    `Fee rate data for ${confirmationTarget} blocks confirmation target is missing in the response`
+  const response = await axios.get<BTCFeeRecommendation>(
+    `${providerUrl}/v1/fees/recommended`
   )
+  if (confirmationTarget <= 1) {
+    return response.data.fastestFee
+  } else if (confirmationTarget <= 3) {
+    return response.data.halfHourFee
+  } else if (confirmationTarget <= 6) {
+    return response.data.hourFee
+  } else {
+    return response.data.economyFee
+  }
 }
 
 export async function fetchBTCUTXOs(
@@ -33,15 +39,10 @@ export async function fetchBTCUTXOs(
   address: string
 ): Promise<UTXO[]> {
   try {
-    const response = await axios.get(`${providerUrl}address/${address}/utxo`)
-    const utxos = response.data.map((utxo: any) => {
-      return {
-        txid: utxo.txid,
-        vout: utxo.vout,
-        value: utxo.value,
-      }
-    })
-    return utxos
+    const response = await axios.get<UTXO[]>(
+      `${providerUrl}/address/${address}/utxo`
+    )
+    return response.data
   } catch (error) {
     console.error('Failed to fetch UTXOs:', error)
     return []
@@ -83,23 +84,18 @@ export async function fetchDerivedBTCAddressAndPublicKey({
   address: string
   publicKey: Buffer
 }> {
-  const contractRootPublicKey = await ChainSignaturesContract.getPublicKey({
+  const derivedPubKeyNAJ = await ChainSignaturesContract.getDerivedPublicKey({
     networkId: nearNetworkId,
     contract: multichainContractId,
+    args: { path: getCanonicalizedDerivationPath(path), predecessor: signerId },
   })
 
-  if (!contractRootPublicKey) {
-    throw new Error('Failed to fetch root public key')
+  if (!derivedPubKeyNAJ) {
+    throw new Error('Failed to get derived public key')
   }
 
-  const derivedKey = await generateCompressedPublicKey(
-    signerId,
-    getCanonicalizedDerivationPath(path),
-    contractRootPublicKey
-  )
-
+  const derivedKey = najToPubKey(derivedPubKeyNAJ, { compress: true })
   const publicKeyBuffer = Buffer.from(derivedKey, 'hex')
-
   const network = parseBTCNetwork(btcNetworkId)
 
   // Use P2WPKH (Bech32) address type

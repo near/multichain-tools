@@ -3,7 +3,6 @@ import * as bitcoin from 'bitcoinjs-lib'
 
 import {
   fetchBTCFeeProperties,
-  fetchBTCUTXOs,
   fetchDerivedBTCAddressAndPublicKey,
   parseBTCNetwork,
 } from './utils'
@@ -15,6 +14,7 @@ import {
   type UTXO,
   type BTCOutput,
   type Transaction,
+  type BTCAddressInfo,
 } from './types'
 import { toRSV } from '../../signature/utils'
 import { type RSVSignature, type MPCSignature } from '../../signature/types'
@@ -46,15 +46,17 @@ export class Bitcoin {
   }
 
   async fetchBalance(address: string): Promise<string> {
-    const utxos = await fetchBTCUTXOs(this.providerUrl, address)
+    const { data } = await axios.get<BTCAddressInfo>(
+      `${this.providerUrl}/address/${address}`
+    )
     return Bitcoin.toBTC(
-      utxos.reduce((acc, utxo) => acc + utxo.value, 0)
+      data.chain_stats.funded_txo_sum - data.chain_stats.spent_txo_sum
     ).toString()
   }
 
   async fetchTransaction(transactionId: string): Promise<bitcoin.Transaction> {
     const { data } = await axios.get<Transaction>(
-      `${this.providerUrl}tx/${transactionId}`
+      `${this.providerUrl}/tx/${transactionId}`
     )
     const tx = new bitcoin.Transaction()
 
@@ -99,16 +101,9 @@ export class Bitcoin {
     return rawSignature
   }
 
-  async sendTransaction(
-    txHex: string,
-    options?: { proxy?: boolean }
-  ): Promise<string | undefined> {
+  async sendTransaction(txHex: string): Promise<string | undefined> {
     try {
-      const proxyUrl = options?.proxy ? 'https://corsproxy.io/?' : ''
-      const response = await axios.post(
-        `${proxyUrl}${this.providerUrl}tx`,
-        txHex
-      )
+      const response = await axios.post<string>(`${this.providerUrl}/tx`, txHex)
 
       if (response.status === 200) {
         return response.data
@@ -132,6 +127,8 @@ export class Bitcoin {
       nearNetworkId: nearAuthentication.networkId,
       multichainContractId: this.contract,
     })
+
+    console.log('test')
 
     const { inputs, outputs } =
       data.inputs && data.outputs
@@ -196,9 +193,7 @@ export class Bitcoin {
     }
 
     psbt.finalizeAllInputs()
-    const txid = await this.sendTransaction(psbt.extractTransaction().toHex(), {
-      proxy: true,
-    })
+    const txid = await this.sendTransaction(psbt.extractTransaction().toHex())
 
     if (txid) {
       return txid

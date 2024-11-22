@@ -29,6 +29,10 @@ type MultiChainContract = Contract & {
     amount: BN
   }) => Promise<MPCSignature>
   experimental_signature_deposit: () => Promise<number>
+  derived_public_key: (args: {
+    path: string
+    predecessor: string
+  }) => Promise<string>
 }
 
 export const ChainSignaturesContract = {
@@ -40,7 +44,11 @@ export const ChainSignaturesContract = {
     contract: ChainSignatureContracts
   }): MultiChainContract => {
     return new Contract(account, contract, {
-      viewMethods: ['public_key', 'experimental_signature_deposit'],
+      viewMethods: [
+        'public_key',
+        'experimental_signature_deposit',
+        'derived_public_key',
+      ],
       changeMethods: ['sign'],
       useLocalViewExecution: false,
     }) as unknown as MultiChainContract
@@ -78,6 +86,23 @@ export const ChainSignaturesContract = {
         await chainSignaturesContract.experimental_signature_deposit()
       ).toLocaleString('fullwide', { useGrouping: false })
     )
+  },
+
+  getDerivedPublicKey: async ({
+    networkId,
+    contract,
+    args,
+  }: {
+    networkId: NearNetworkIds
+    contract: ChainSignatureContracts
+    args: { path: string; predecessor: string }
+  }): Promise<string | undefined> => {
+    const nearAccount = await getNearAccount({ networkId })
+    const chainSignaturesContract = ChainSignaturesContract.getContract({
+      account: nearAccount,
+      contract,
+    })
+    return await chainSignaturesContract.derived_public_key(args)
   },
 
   sign: async ({
