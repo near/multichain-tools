@@ -263,10 +263,10 @@ export class Bitcoin {
       sign: (hash) => {
         payloads.push({
           index,
-          payload: hash,
+          payload: new Uint8Array(hash),
         })
         // The return it's intentionally wrong as this is a mock signer
-        return hash
+        return Buffer.from(new Array(64).fill(0)) // Mock 64-byte signature with zeros
       },
     })
     for (let index = 0; index < psbt.txInputs.length; index += 1) {

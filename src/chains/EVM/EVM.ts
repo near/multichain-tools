@@ -107,12 +107,17 @@ export class EVM {
       storageKey?: string
     }
   }): Promise<ethers.TransactionResponse> {
-    const transaction: ethers.TransactionLike = JSON.parse(
+    const transactionData =
       transactionSerialized ??
-        (options?.storageKey
-          ? window.localStorage.getItem(options.storageKey)
-          : '')
-    )
+      (options?.storageKey
+        ? window.localStorage.getItem(options.storageKey)
+        : null)
+
+    if (!transactionData) {
+      throw new Error('No transaction data provided and none found in storage')
+    }
+
+    const transaction: ethers.TransactionLike = JSON.parse(transactionData)
 
     const transactionResponse = await this.sendSignedTransaction(
       transaction,
@@ -138,6 +143,7 @@ export class EVM {
     transaction: string
     txHash: Uint8Array
   }> {
+    console.log('v3 test')
     const derivedFrom = await fetchDerivedEVMAddress({
       signerId: nearAuthentication.accountId,
       path,
@@ -160,15 +166,16 @@ export class EVM {
 
     const txHash = EVM.prepareTransactionForSignature(transaction)
 
+    const serializedTransaction = JSON.stringify(transaction, (_, value) =>
+      typeof value === 'bigint' ? value.toString() : value
+    )
+
     if (options?.storageKey) {
-      window.localStorage.setItem(
-        options.storageKey,
-        JSON.stringify(transaction)
-      )
+      window.localStorage.setItem(options.storageKey, serializedTransaction)
     }
 
     return {
-      transaction: JSON.stringify(transaction),
+      transaction: serializedTransaction,
       txHash,
     }
   }
