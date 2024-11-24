@@ -14,7 +14,7 @@ import {
   type BTCNetworkIds,
 } from './types'
 import { getCanonicalizedDerivationPath } from '../../kdf/utils'
-import { ChainSignaturesContract } from '../../signature/chain-signatures-contract'
+import { ChainSignaturesContract } from '../../signature/ChainSignaturesContract/ChainSignaturesContract'
 import { najToPubKey } from '../../kdf/kdf'
 
 export async function fetchBTCFeeRate(

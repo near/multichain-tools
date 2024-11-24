@@ -7,7 +7,7 @@ import { getCanonicalizedDerivationPath } from '../../kdf/utils'
 import { type CosmosPublicKeyAndAddressRequest } from './types'
 import { chains } from 'chain-registry'
 import { StargateClient } from '@cosmjs/stargate'
-import { ChainSignaturesContract } from '../../signature/chain-signatures-contract'
+import { ChainSignaturesContract } from '../../signature/ChainSignaturesContract/ChainSignaturesContract'
 
 export async function fetchDerivedCosmosAddressAndPublicKey({
   signerId,

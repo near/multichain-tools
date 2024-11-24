@@ -1,1 +1,1 @@
-export * from './chain-signatures-contract'
+export * from './ChainSignaturesContract/ChainSignaturesContract'

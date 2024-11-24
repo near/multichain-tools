@@ -10,16 +10,13 @@ import { type MPCSignature, type RSVSignature } from '../../signature/types'
 export class EVM {
   private readonly provider: ethers.JsonRpcProvider
   private readonly contract: ChainSignatureContracts
-  private readonly signer: (txHash: Uint8Array) => Promise<MPCSignature>
 
   constructor(config: {
     providerUrl: string
     contract: ChainSignatureContracts
-    signer: (txHash: Uint8Array) => Promise<MPCSignature>
   }) {
     this.provider = new ethers.JsonRpcProvider(config.providerUrl)
     this.contract = config.contract
-    this.signer = config.signer
   }
 
   static prepareTransactionForSignature(
@@ -99,11 +96,48 @@ export class EVM {
     return ethers.Signature.from({ r, s, v })
   }
 
-  async handleTransaction(
-    data: EVMTransaction,
-    nearAuthentication: NearAuthentication,
+  async reconstructSignature({
+    transactionSerialized,
+    signature,
+    options,
+  }: {
+    transactionSerialized: string
+    signature: MPCSignature
+    options?: {
+      storageKey?: string
+    }
+  }): Promise<ethers.TransactionResponse> {
+    const transaction: ethers.TransactionLike = JSON.parse(
+      transactionSerialized ??
+        (options?.storageKey
+          ? window.localStorage.getItem(options.storageKey)
+          : '')
+    )
+
+    const transactionResponse = await this.sendSignedTransaction(
+      transaction,
+      this.parseRSVSignature(toRSV(signature))
+    )
+
+    return transactionResponse
+  }
+
+  async getSerializedTransactionAndPayloadToSign({
+    data,
+    nearAuthentication,
+    path,
+    options,
+  }: {
+    data: EVMTransaction
+    nearAuthentication: NearAuthentication
     path: KeyDerivationPath
-  ): Promise<ethers.TransactionResponse | undefined> {
+    options?: {
+      storageKey?: string
+    }
+  }): Promise<{
+    transaction: string
+    txHash: Uint8Array
+  }> {
     const derivedFrom = await fetchDerivedEVMAddress({
       signerId: nearAuthentication.accountId,
       path,
@@ -125,12 +159,17 @@ export class EVM {
     })
 
     const txHash = EVM.prepareTransactionForSignature(transaction)
-    const mpcSignature = await this.signer(txHash)
-    const transactionResponse = await this.sendSignedTransaction(
-      transaction,
-      this.parseRSVSignature(toRSV(mpcSignature))
-    )
 
-    return transactionResponse
+    if (options?.storageKey) {
+      window.localStorage.setItem(
+        options.storageKey,
+        JSON.stringify(transaction)
+      )
+    }
+
+    return {
+      transaction: JSON.stringify(transaction),
+      txHash,
+    }
   }
 }

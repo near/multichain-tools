@@ -1,19 +1,20 @@
 import { type Account, Contract } from '@near-js/accounts'
 import { actionCreators } from '@near-js/transactions'
-import { getNearAccount, NEAR_MAX_GAS } from './utils'
+import { getNearAccount, NEAR_MAX_GAS } from '../utils'
 import BN from 'bn.js'
 import { ethers } from 'ethers'
 
-import { type MPCSignature } from './types'
+import { type MPCSignature } from '../types'
 import {
   type NearNetworkIds,
   type ChainSignatureContracts,
   type NearAuthentication,
-} from '../chains/types'
-import { parseSignedDelegateForRelayer } from '../relayer'
+} from '../../chains/types'
+import { parseSignedDelegateForRelayer } from '../../relayer'
 import { type ExecutionOutcomeWithId } from 'near-api-js/lib/providers'
-import { type KeyDerivationPath } from '../kdf/types'
-import { getCanonicalizedDerivationPath } from '../kdf/utils'
+import { type KeyDerivationPath } from '../../kdf/types'
+import { getCanonicalizedDerivationPath } from '../../kdf/utils'
+import { type KeyPair } from '@near-js/crypto'
 
 interface SignArgs {
   payload: number[]
@@ -111,17 +112,21 @@ export const ChainSignaturesContract = {
     nearAuthentication,
     contract,
     relayerUrl,
+    keypair,
+    proposedDeposit,
   }: {
     hashedTx: Uint8Array
     path: KeyDerivationPath
     nearAuthentication: NearAuthentication
     contract: ChainSignatureContracts
     relayerUrl?: string
+    keypair: KeyPair
+    proposedDeposit?: BN
   }): Promise<MPCSignature> => {
     const account = await getNearAccount({
       networkId: nearAuthentication.networkId,
       accountId: nearAuthentication.accountId,
-      keypair: nearAuthentication.keypair,
+      keypair,
     })
 
     const mpcPayload = {
@@ -131,7 +136,7 @@ export const ChainSignaturesContract = {
     }
 
     const deposit =
-      nearAuthentication.deposit ??
+      proposedDeposit ??
       (await ChainSignaturesContract.getCurrentFee({
         networkId: nearAuthentication.networkId,
         contract,

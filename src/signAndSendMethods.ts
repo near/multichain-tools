@@ -5,41 +5,40 @@ import { Cosmos } from './chains/Cosmos/Cosmos'
 import { EVM } from './chains/EVM/EVM'
 import { type EVMRequest } from './chains/EVM/types'
 import { type Response } from './chains/types'
-import { ChainSignaturesContract } from './signature/chain-signatures-contract'
+import { ChainSignaturesContract } from './signature/ChainSignaturesContract/ChainSignaturesContract'
+import { type KeyPair } from '@near-js/crypto'
 
 export const signAndSendEVMTransaction = async (
-  req: EVMRequest
+  req: EVMRequest,
+  keyPair: KeyPair
 ): Promise<Response> => {
   try {
-    const evm = new EVM({
-      ...req.chainConfig,
-      signer: async (txHash) =>
-        await ChainSignaturesContract.sign({
-          hashedTx: txHash,
-          path: req.derivationPath,
-          nearAuthentication: req.nearAuthentication,
-          contract: req.chainConfig.contract,
-          relayerUrl: req.fastAuthRelayerUrl,
-        }),
+    const evm = new EVM(req.chainConfig)
+
+    const { transaction, txHash } =
+      await evm.getSerializedTransactionAndPayloadToSign({
+        data: req.transaction,
+        nearAuthentication: req.nearAuthentication,
+        path: req.derivationPath,
+      })
+
+    const signature = await ChainSignaturesContract.sign({
+      hashedTx: txHash,
+      path: req.derivationPath,
+      nearAuthentication: req.nearAuthentication,
+      contract: req.chainConfig.contract,
+      relayerUrl: req.fastAuthRelayerUrl,
+      keypair: keyPair,
     })
 
-    const res = await evm.handleTransaction(
-      req.transaction,
-      req.nearAuthentication,
-      req.derivationPath
-    )
+    const res = await evm.reconstructSignature({
+      transactionSerialized: transaction,
+      signature,
+    })
 
-    if (res) {
-      return {
-        transactionHash: res.hash,
-        success: true,
-      }
-    } else {
-      console.error(res)
-      return {
-        success: false,
-        errorMessage: 'Transaction failed',
-      }
+    return {
+      transactionHash: res.hash,
+      success: true,
     }
   } catch (e: unknown) {
     console.error(e)
@@ -51,26 +50,39 @@ export const signAndSendEVMTransaction = async (
 }
 
 export const signAndSendBTCTransaction = async (
-  req: BitcoinRequest
+  req: BitcoinRequest,
+  keyPair: KeyPair
 ): Promise<Response> => {
   try {
-    const btc = new Bitcoin({
-      ...req.chainConfig,
-      signer: async (txHash) =>
-        await ChainSignaturesContract.sign({
-          hashedTx: txHash,
-          path: req.derivationPath,
-          nearAuthentication: req.nearAuthentication,
-          contract: req.chainConfig.contract,
-          relayerUrl: req.fastAuthRelayerUrl,
-        }),
-    })
+    const btc = new Bitcoin(req.chainConfig)
 
-    const txid = await btc.handleTransaction(
-      req.transaction,
-      req.nearAuthentication,
-      req.derivationPath
+    const { hexTransaction, payloads } =
+      await btc.getSerializedTransactionAndPayloadToSign({
+        data: req.transaction,
+        nearAuthentication: req.nearAuthentication,
+        path: req.derivationPath,
+      })
+
+    const signatures = await Promise.all(
+      payloads.map(
+        async ({ payload }) =>
+          await ChainSignaturesContract.sign({
+            hashedTx: payload,
+            path: req.derivationPath,
+            nearAuthentication: req.nearAuthentication,
+            contract: req.chainConfig.contract,
+            relayerUrl: req.fastAuthRelayerUrl,
+            keypair: keyPair,
+          })
+      )
     )
+
+    const txid = await btc.reconstructSignature({
+      nearAuthentication: req.nearAuthentication,
+      path: req.derivationPath,
+      signatures,
+      psbtHex: hexTransaction,
+    })
 
     return {
       transactionHash: txid,
@@ -85,27 +97,40 @@ export const signAndSendBTCTransaction = async (
 }
 
 export const signAndSendCosmosTransaction = async (
-  req: CosmosRequest
+  req: CosmosRequest,
+  keyPair: KeyPair
 ): Promise<Response> => {
   try {
-    const cosmos = new Cosmos({
-      contract: req.chainConfig.contract,
-      chainId: req.chainConfig.chainId,
-      signer: async (txHash) =>
-        await ChainSignaturesContract.sign({
-          hashedTx: txHash,
-          path: req.derivationPath,
-          nearAuthentication: req.nearAuthentication,
-          contract: req.chainConfig.contract,
-          relayerUrl: req.fastAuthRelayerUrl,
-        }),
-    })
+    const cosmos = new Cosmos(req.chainConfig)
 
-    const txHash = await cosmos.handleTransaction(
-      req.transaction,
-      req.nearAuthentication,
-      req.derivationPath
+    const { transaction, payloads } =
+      await cosmos.getSerializedTransactionAndPayloads({
+        data: req.transaction,
+        nearAuthentication: req.nearAuthentication,
+        path: req.derivationPath,
+      })
+
+    const signatures = await Promise.all(
+      payloads.map(
+        async (payload) =>
+          await ChainSignaturesContract.sign({
+            hashedTx: payload,
+            path: req.derivationPath,
+            nearAuthentication: req.nearAuthentication,
+            contract: req.chainConfig.contract,
+            relayerUrl: req.fastAuthRelayerUrl,
+            keypair: keyPair,
+          })
+      )
     )
+
+    const txHash = await cosmos.handleTransaction({
+      data: req.transaction,
+      nearAuthentication: req.nearAuthentication,
+      path: req.derivationPath,
+      serializedTransaction: transaction,
+      mpcSignatures: signatures,
+    })
 
     return {
       transactionHash: txHash,

@@ -23,18 +23,15 @@ export class Bitcoin {
   private readonly network: BTCNetworkIds
   private readonly providerUrl: string
   private readonly contract: ChainSignatureContracts
-  private readonly signer: (txHash: Uint8Array) => Promise<MPCSignature>
 
   constructor(config: {
     network: BTCNetworkIds
     providerUrl: string
     contract: ChainSignatureContracts
-    signer: (txHash: Uint8Array) => Promise<MPCSignature>
   }) {
     this.network = config.network
     this.providerUrl = config.providerUrl
     this.contract = config.contract
-    this.signer = config.signer
   }
 
   static toBTC(satoshis: number): number {
@@ -197,17 +194,29 @@ export class Bitcoin {
       multichainContractId: this.contract,
     })
 
-    const keyPair = {
-      publicKey,
-      sign: async (hash: Buffer): Promise<Buffer> => {
-        const mpcSignature = await this.signer(hash)
-        return Bitcoin.parseRSVSignature(toRSV(mpcSignature))
-      },
+    let psbt: bitcoin.Psbt | undefined
+    if (psbtHex) {
+      psbt = bitcoin.Psbt.fromHex(psbtHex)
+    } else if (options?.storageKey) {
+      const psbtHex = window.localStorage.getItem(options.storageKey)
+      if (psbtHex) {
+        psbt = bitcoin.Psbt.fromHex(psbtHex)
+      }
     }
 
-    // Sign inputs sequentially to avoid nonce issues
+    if (!psbt) {
+      throw new Error('No PSBT provided or stored in localStorage')
+    }
+
+    const keyPair = (index: number): bitcoin.Signer => ({
+      publicKey,
+      sign: () => {
+        const mpcSignature = signatures[index]
+        return Bitcoin.parseRSVSignature(toRSV(mpcSignature))
+      },
+    })
     for (let index = 0; index < psbt.txInputs.length; index += 1) {
-      await psbt.signInputAsync(index, keyPair)
+      psbt.signInput(index, keyPair(index))
     }
 
     psbt.finalizeAllInputs()
@@ -219,7 +228,7 @@ export class Bitcoin {
     throw new Error('Failed to broadcast transaction')
   }
 
-  async getHexTransactionAndPayloadToSign({
+  async getSerializedTransactionAndPayloadToSign({
     data,
     nearAuthentication,
     path,
@@ -256,7 +265,7 @@ export class Bitcoin {
           index,
           payload: hash,
         })
-        // The return it's intentional wrong as this is a mock signer
+        // The return it's intentionally wrong as this is a mock signer
         return hash
       },
     })

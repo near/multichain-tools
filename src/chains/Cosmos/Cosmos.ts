@@ -26,57 +26,18 @@ export class Cosmos {
   private readonly registry: Registry
   private readonly contract: ChainSignatureContracts
   private readonly chainId: CosmosNetworkIds
-  private readonly signer: (txHash: Uint8Array) => Promise<MPCSignature>
   // TODO: should include providerUrl, so the user can choose rpc
 
   constructor({
     contract,
     chainId,
-    signer,
   }: {
     contract: ChainSignatureContracts
     chainId: CosmosNetworkIds
-    signer: (txHash: Uint8Array) => Promise<MPCSignature>
   }) {
     this.registry = new Registry()
     this.contract = contract
     this.chainId = chainId
-    this.signer = signer
-  }
-
-  private createSigner(
-    address: string,
-    publicKey: Uint8Array
-  ): OfflineDirectSigner {
-    return {
-      getAccounts: async () => [
-        {
-          address,
-          algo: 'secp256k1',
-          pubkey: publicKey,
-        },
-      ],
-      signDirect: async (signerAddress: string, signDoc: SignDoc) => {
-        if (signerAddress !== address) {
-          throw new Error(`Address ${signerAddress} not found in wallet`)
-        }
-
-        const txHash = sha256(makeSignBytes(signDoc))
-        const mpcSignature = await this.signer(txHash)
-        const signature = this.parseRSVSignature(toRSV(mpcSignature))
-
-        return {
-          signed: signDoc,
-          signature: {
-            pub_key: {
-              type: 'tendermint/PubKeySecp256k1',
-              value: toBase64(publicKey),
-            },
-            signature: toBase64(signature),
-          },
-        }
-      },
-    }
   }
 
   parseRSVSignature(rsvSignature: RSVSignature): Uint8Array {
@@ -102,11 +63,126 @@ export class Cosmos {
     )
   }
 
-  async handleTransaction(
-    data: CosmosTransaction,
-    nearAuthentication: NearAuthentication,
+  async handleTransaction({
+    data,
+    nearAuthentication,
+    path,
+    serializedTransaction,
+    mpcSignatures,
+    options,
+  }: {
+    data: CosmosTransaction
+    nearAuthentication: NearAuthentication
     path: KeyDerivationPath
-  ): Promise<string> {
+    serializedTransaction?: string
+    mpcSignatures: MPCSignature[]
+    options?: {
+      storageKey?: string
+    }
+  }): Promise<string> {
+    const { prefix, denom, rpcUrl, gasPrice } = await fetchChainInfo(
+      this.chainId
+    )
+
+    const { publicKey } = await fetchDerivedCosmosAddressAndPublicKey({
+      signerId: nearAuthentication.accountId,
+      path,
+      nearNetworkId: nearAuthentication.networkId,
+      multichainContractId: this.contract,
+      prefix,
+    })
+
+    let transaction: string | undefined
+    if (serializedTransaction) {
+      transaction = serializedTransaction
+    } else if (options?.storageKey) {
+      const storageTransaction = window.localStorage.getItem(options.storageKey)
+      if (!storageTransaction) {
+        throw new Error('No transaction found in storage')
+      }
+      transaction = storageTransaction
+    }
+
+    if (!transaction) {
+      throw new Error('No transaction found')
+    }
+
+    const {
+      address,
+      messages: updatedMessages,
+      memo,
+      fee,
+    }: {
+      address: string
+      messages: EncodeObject[]
+      memo?: string
+      fee: StdFee
+    } = JSON.parse(transaction)
+
+    const signer: OfflineDirectSigner = {
+      getAccounts: async () => [
+        {
+          address,
+          algo: 'secp256k1',
+          pubkey: publicKey,
+        },
+      ],
+      signDirect: async (signerAddress: string, signDoc: SignDoc) => {
+        if (signerAddress !== address) {
+          throw new Error(`Address ${signerAddress} not found in wallet`)
+        }
+
+        const signature = this.parseRSVSignature(toRSV(mpcSignatures[0]))
+
+        return {
+          signed: signDoc,
+          signature: {
+            pub_key: {
+              type: 'tendermint/PubKeySecp256k1',
+              value: toBase64(publicKey),
+            },
+            signature: toBase64(signature),
+          },
+        }
+      },
+    }
+
+    const client = await SigningStargateClient.connectWithSigner(
+      rpcUrl,
+      signer,
+      {
+        registry: this.registry,
+        gasPrice: GasPrice.fromString(`${gasPrice}${denom}`),
+      }
+    )
+
+    const result = await client.signAndBroadcast(
+      address,
+      updatedMessages,
+      fee,
+      memo || ''
+    )
+    assertIsDeliverTxSuccess(result)
+
+    return result.transactionHash
+  }
+
+  async getSerializedTransactionAndPayloads({
+    data,
+    nearAuthentication,
+    path,
+    options,
+  }: {
+    data: CosmosTransaction
+    nearAuthentication: NearAuthentication
+    path: KeyDerivationPath
+    options?: {
+      storageKey?: string
+    }
+  }): Promise<{
+    transaction: string
+    payloads: Uint8Array[]
+  }> {
     const { prefix, denom, rpcUrl, gasPrice } = await fetchChainInfo(
       this.chainId
     )
@@ -119,7 +195,35 @@ export class Cosmos {
       prefix,
     })
 
-    const signer = this.createSigner(address, publicKey)
+    const payloads: Uint8Array[] = []
+    const signer: OfflineDirectSigner = {
+      getAccounts: async () => [
+        {
+          address,
+          algo: 'secp256k1',
+          pubkey: publicKey,
+        },
+      ],
+      signDirect: async (signerAddress: string, signDoc: SignDoc) => {
+        if (signerAddress !== address) {
+          throw new Error(`Address ${signerAddress} not found in wallet`)
+        }
+
+        const txHash = sha256(makeSignBytes(signDoc))
+        payloads.push(txHash)
+
+        return {
+          signed: signDoc,
+          signature: {
+            pub_key: {
+              type: 'tendermint/PubKeySecp256k1',
+              value: toBase64(publicKey),
+            },
+            signature: toBase64(txHash),
+          },
+        }
+      },
+    }
 
     const client = await SigningStargateClient.connectWithSigner(
       rpcUrl,
@@ -133,14 +237,22 @@ export class Cosmos {
     const fee = this.createFee(denom, gasPrice, data.gas)
     const updatedMessages = this.updateMessages(data.messages, address)
 
-    const result = await client.signAndBroadcast(
-      address,
-      updatedMessages,
-      fee,
-      data.memo || ''
-    )
-    assertIsDeliverTxSuccess(result)
+    await client.sign(address, updatedMessages, fee, data.memo || '')
 
-    return result.transactionHash
+    const serializedTransaction = JSON.stringify({
+      address,
+      messages: updatedMessages,
+      fee,
+      memo: data.memo,
+    })
+
+    if (options?.storageKey) {
+      window.localStorage.setItem(options.storageKey, serializedTransaction)
+    }
+
+    return {
+      transaction: serializedTransaction,
+      payloads,
+    }
   }
 }
