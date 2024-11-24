@@ -132,6 +132,7 @@ export class Cosmos {
           throw new Error(`Address ${signerAddress} not found in wallet`)
         }
 
+        // TODO: Should handle multiple signatures
         const signature = this.parseRSVSignature(toRSV(mpcSignatures[0]))
 
         return {
@@ -195,6 +196,7 @@ export class Cosmos {
       prefix,
     })
 
+    // Mock signer to get the payloads as the library doesn't expose a methods with such functionality
     const payloads: Uint8Array[] = []
     const signer: OfflineDirectSigner = {
       getAccounts: async () => [
@@ -219,6 +221,7 @@ export class Cosmos {
               type: 'tendermint/PubKeySecp256k1',
               value: toBase64(publicKey),
             },
+            // The return it's intentionally wrong as this is a mock signer
             signature: toBase64(txHash),
           },
         }
