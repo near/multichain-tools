@@ -6,8 +6,9 @@ import { type EVMTransaction } from './types'
 import { type KeyDerivationPath } from '../../kdf/types'
 import { toRSV } from '../../signature/utils'
 import { type MPCSignature, type RSVSignature } from '../../signature/types'
+import { type Chain } from '../Chain'
 
-export class EVM {
+export class EVM implements Chain<EVMTransaction, ethers.TransactionResponse> {
   private readonly provider: ethers.JsonRpcProvider
   private readonly contract: ChainSignatureContracts
 
@@ -22,9 +23,8 @@ export class EVM {
   static prepareTransactionForSignature(
     transaction: ethers.TransactionLike
   ): Uint8Array {
-    const serializedTransaction =
-      ethers.Transaction.from(transaction).unsignedSerialized
-    const transactionHash = keccak256(serializedTransaction)
+    const txSerialized = ethers.Transaction.from(transaction).unsignedSerialized
+    const transactionHash = keccak256(txSerialized)
 
     return new Uint8Array(ethers.getBytes(transactionHash))
   }
@@ -34,11 +34,11 @@ export class EVM {
     signature: ethers.SignatureLike
   ): Promise<ethers.TransactionResponse> {
     try {
-      const serializedTransaction = ethers.Transaction.from({
+      const txSerialized = ethers.Transaction.from({
         ...transaction,
         signature,
       }).serialized
-      return await this.provider.broadcastTransaction(serializedTransaction)
+      return await this.provider.broadcastTransaction(txSerialized)
     } catch (error) {
       console.error('Transaction execution failed:', error)
       throw new Error('Failed to send signed transaction.')
@@ -96,38 +96,7 @@ export class EVM {
     return ethers.Signature.from({ r, s, v })
   }
 
-  async reconstructSignature({
-    transactionSerialized,
-    signature,
-    options,
-  }: {
-    transactionSerialized: string
-    signature: MPCSignature
-    options?: {
-      storageKey?: string
-    }
-  }): Promise<ethers.TransactionResponse> {
-    const transactionData =
-      transactionSerialized ??
-      (options?.storageKey
-        ? window.localStorage.getItem(options.storageKey)
-        : null)
-
-    if (!transactionData) {
-      throw new Error('No transaction data provided and none found in storage')
-    }
-
-    const transaction: ethers.TransactionLike = JSON.parse(transactionData)
-
-    const transactionResponse = await this.sendSignedTransaction(
-      transaction,
-      this.parseRSVSignature(toRSV(signature))
-    )
-
-    return transactionResponse
-  }
-
-  async getSerializedTransactionAndPayloadToSign({
+  async getMPCPayloadAndTxSerialized({
     data,
     nearAuthentication,
     path,
@@ -140,8 +109,8 @@ export class EVM {
       storageKey?: string
     }
   }): Promise<{
-    transaction: string
-    txHash: Uint8Array
+    txSerialized: string
+    mpcPayloads: Array<{ index: number; payload: Uint8Array }>
   }> {
     console.log('v3 test')
     const derivedFrom = await fetchDerivedEVMAddress({
@@ -166,17 +135,53 @@ export class EVM {
 
     const txHash = EVM.prepareTransactionForSignature(transaction)
 
-    const serializedTransaction = JSON.stringify(transaction, (_, value) =>
+    const txSerialized = JSON.stringify(transaction, (_, value) =>
       typeof value === 'bigint' ? value.toString() : value
     )
 
     if (options?.storageKey) {
-      window.localStorage.setItem(options.storageKey, serializedTransaction)
+      window.localStorage.setItem(options.storageKey, txSerialized)
     }
 
     return {
-      transaction: serializedTransaction,
-      txHash,
+      txSerialized,
+      mpcPayloads: [
+        {
+          index: 0,
+          payload: txHash,
+        },
+      ],
     }
+  }
+
+  async reconstructAndSendTransaction({
+    txSerialized,
+    mpcSignatures,
+    options,
+  }: {
+    txSerialized?: string
+    mpcSignatures: MPCSignature[]
+    options?: {
+      storageKey?: string
+    }
+  }): Promise<ethers.TransactionResponse> {
+    const transactionData =
+      txSerialized ??
+      (options?.storageKey
+        ? window.localStorage.getItem(options.storageKey)
+        : null)
+
+    if (!transactionData) {
+      throw new Error('No transaction data provided and none found in storage')
+    }
+
+    const transaction: ethers.TransactionLike = JSON.parse(transactionData)
+
+    const transactionResponse = await this.sendSignedTransaction(
+      transaction,
+      this.parseRSVSignature(toRSV(mpcSignatures[0]))
+    )
+
+    return transactionResponse
   }
 }

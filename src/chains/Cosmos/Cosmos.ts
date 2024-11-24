@@ -63,112 +63,7 @@ export class Cosmos {
     )
   }
 
-  async handleTransaction({
-    data,
-    nearAuthentication,
-    path,
-    serializedTransaction,
-    mpcSignatures,
-    options,
-  }: {
-    data: CosmosTransaction
-    nearAuthentication: NearAuthentication
-    path: KeyDerivationPath
-    serializedTransaction?: string
-    mpcSignatures: MPCSignature[]
-    options?: {
-      storageKey?: string
-    }
-  }): Promise<string> {
-    const { prefix, denom, rpcUrl, gasPrice } = await fetchChainInfo(
-      this.chainId
-    )
-
-    const { publicKey } = await fetchDerivedCosmosAddressAndPublicKey({
-      signerId: nearAuthentication.accountId,
-      path,
-      nearNetworkId: nearAuthentication.networkId,
-      multichainContractId: this.contract,
-      prefix,
-    })
-
-    let transaction: string | undefined
-    if (serializedTransaction) {
-      transaction = serializedTransaction
-    } else if (options?.storageKey) {
-      const storageTransaction = window.localStorage.getItem(options.storageKey)
-      if (!storageTransaction) {
-        throw new Error('No transaction found in storage')
-      }
-      transaction = storageTransaction
-    }
-
-    if (!transaction) {
-      throw new Error('No transaction found')
-    }
-
-    const {
-      address,
-      messages: updatedMessages,
-      memo,
-      fee,
-    }: {
-      address: string
-      messages: EncodeObject[]
-      memo?: string
-      fee: StdFee
-    } = JSON.parse(transaction)
-
-    const signer: OfflineDirectSigner = {
-      getAccounts: async () => [
-        {
-          address,
-          algo: 'secp256k1',
-          pubkey: publicKey,
-        },
-      ],
-      signDirect: async (signerAddress: string, signDoc: SignDoc) => {
-        if (signerAddress !== address) {
-          throw new Error(`Address ${signerAddress} not found in wallet`)
-        }
-
-        // TODO: Should handle multiple signatures
-        const signature = this.parseRSVSignature(toRSV(mpcSignatures[0]))
-
-        return {
-          signed: signDoc,
-          signature: {
-            pub_key: {
-              type: 'tendermint/PubKeySecp256k1',
-              value: toBase64(publicKey),
-            },
-            signature: toBase64(signature),
-          },
-        }
-      },
-    }
-
-    const client = await SigningStargateClient.connectWithSigner(
-      rpcUrl,
-      signer,
-      {
-        registry: this.registry,
-        gasPrice: GasPrice.fromString(`${gasPrice}${denom}`),
-      }
-    )
-
-    const result = await client.signAndBroadcast(
-      address,
-      updatedMessages,
-      fee,
-      memo || ''
-    )
-    assertIsDeliverTxSuccess(result)
-
-    return result.transactionHash
-  }
-
-  async getSerializedTransactionAndPayloads({
+  async getMPCPayloadAndTxSerialized({
     data,
     nearAuthentication,
     path,
@@ -181,8 +76,8 @@ export class Cosmos {
       storageKey?: string
     }
   }): Promise<{
-    transaction: string
-    payloads: Uint8Array[]
+    txSerialized: string
+    mpcPayloads: Array<{ index: number; payload: Uint8Array }>
   }> {
     const { prefix, denom, rpcUrl, gasPrice } = await fetchChainInfo(
       this.chainId
@@ -254,8 +149,115 @@ export class Cosmos {
     }
 
     return {
-      transaction: serializedTransaction,
-      payloads,
+      txSerialized: serializedTransaction,
+      mpcPayloads: payloads.map((payload, index) => ({
+        index,
+        payload,
+      })),
     }
+  }
+
+  async reconstructAndSendTransaction({
+    nearAuthentication,
+    path,
+    txSerialized,
+    mpcSignatures,
+    options,
+  }: {
+    data: CosmosTransaction
+    nearAuthentication: NearAuthentication
+    path: KeyDerivationPath
+    txSerialized?: string
+    mpcSignatures: MPCSignature[]
+    options?: {
+      storageKey?: string
+    }
+  }): Promise<string> {
+    const { prefix, denom, rpcUrl, gasPrice } = await fetchChainInfo(
+      this.chainId
+    )
+
+    const { publicKey } = await fetchDerivedCosmosAddressAndPublicKey({
+      signerId: nearAuthentication.accountId,
+      path,
+      nearNetworkId: nearAuthentication.networkId,
+      multichainContractId: this.contract,
+      prefix,
+    })
+
+    let transaction: string | undefined
+    if (txSerialized) {
+      transaction = txSerialized
+    } else if (options?.storageKey) {
+      const storageTransaction = window.localStorage.getItem(options.storageKey)
+      if (!storageTransaction) {
+        throw new Error('No transaction found in storage')
+      }
+      transaction = storageTransaction
+    }
+
+    if (!transaction) {
+      throw new Error('No transaction found')
+    }
+
+    const {
+      address,
+      messages: updatedMessages,
+      memo,
+      fee,
+    }: {
+      address: string
+      messages: EncodeObject[]
+      memo?: string
+      fee: StdFee
+    } = JSON.parse(transaction)
+
+    const signer: OfflineDirectSigner = {
+      getAccounts: async () => [
+        {
+          address,
+          algo: 'secp256k1',
+          pubkey: publicKey,
+        },
+      ],
+      signDirect: async (signerAddress: string, signDoc: SignDoc) => {
+        if (signerAddress !== address) {
+          throw new Error(`Address ${signerAddress} not found in wallet`)
+        }
+
+        // TODO: Should handle multiple signatures
+        const signature = this.parseRSVSignature(toRSV(mpcSignatures[0]))
+
+        return {
+          signed: signDoc,
+          signature: {
+            pub_key: {
+              type: 'tendermint/PubKeySecp256k1',
+              value: toBase64(publicKey),
+            },
+            signature: toBase64(signature),
+          },
+        }
+      },
+    }
+
+    const client = await SigningStargateClient.connectWithSigner(
+      rpcUrl,
+      signer,
+      {
+        registry: this.registry,
+        gasPrice: GasPrice.fromString(`${gasPrice}${denom}`),
+      }
+    )
+
+    const result = await client.signAndBroadcast(
+      address,
+      updatedMessages,
+      fee,
+      memo || ''
+    )
+    assertIsDeliverTxSuccess(result)
+
+    return result.transactionHash
   }
 }

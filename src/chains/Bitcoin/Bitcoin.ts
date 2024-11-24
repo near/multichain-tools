@@ -18,8 +18,9 @@ import {
 } from './types'
 import { toRSV } from '../../signature/utils'
 import { type RSVSignature, type MPCSignature } from '../../signature/types'
+import { type Chain } from '../Chain'
 
-export class Bitcoin {
+export class Bitcoin implements Chain<BTCTransaction, string> {
   private readonly network: BTCNetworkIds
   private readonly providerUrl: string
   private readonly contract: ChainSignatureContracts
@@ -171,64 +172,7 @@ export class Bitcoin {
     return psbt
   }
 
-  async reconstructSignature({
-    nearAuthentication,
-    path,
-    signatures,
-    psbtHex,
-    options,
-  }: {
-    nearAuthentication: NearAuthentication
-    path: KeyDerivationPath
-    signatures: MPCSignature[]
-    psbtHex?: string
-    options?: {
-      storageKey?: string
-    }
-  }): Promise<string> {
-    const { publicKey } = await fetchDerivedBTCAddressAndPublicKey({
-      signerId: nearAuthentication.accountId,
-      path,
-      btcNetworkId: this.network,
-      nearNetworkId: nearAuthentication.networkId,
-      multichainContractId: this.contract,
-    })
-
-    let psbt: bitcoin.Psbt | undefined
-    if (psbtHex) {
-      psbt = bitcoin.Psbt.fromHex(psbtHex)
-    } else if (options?.storageKey) {
-      const psbtHex = window.localStorage.getItem(options.storageKey)
-      if (psbtHex) {
-        psbt = bitcoin.Psbt.fromHex(psbtHex)
-      }
-    }
-
-    if (!psbt) {
-      throw new Error('No PSBT provided or stored in localStorage')
-    }
-
-    const keyPair = (index: number): bitcoin.Signer => ({
-      publicKey,
-      sign: () => {
-        const mpcSignature = signatures[index]
-        return Bitcoin.parseRSVSignature(toRSV(mpcSignature))
-      },
-    })
-    for (let index = 0; index < psbt.txInputs.length; index += 1) {
-      psbt.signInput(index, keyPair(index))
-    }
-
-    psbt.finalizeAllInputs()
-    const txid = await this.sendTransaction(psbt.extractTransaction().toHex())
-
-    if (txid) {
-      return txid
-    }
-    throw new Error('Failed to broadcast transaction')
-  }
-
-  async getSerializedTransactionAndPayloadToSign({
+  async getMPCPayloadAndTxSerialized({
     data,
     nearAuthentication,
     path,
@@ -241,8 +185,8 @@ export class Bitcoin {
       storageKey?: string
     }
   }): Promise<{
-    hexTransaction: string
-    payloads: Array<{ index: number; payload: Uint8Array }>
+    txSerialized: string
+    mpcPayloads: Array<{ index: number; payload: Uint8Array }>
   }> {
     const { address, publicKey } = await fetchDerivedBTCAddressAndPublicKey({
       signerId: nearAuthentication.accountId,
@@ -278,8 +222,65 @@ export class Bitcoin {
     }
 
     return {
-      hexTransaction: psbtHex,
-      payloads,
+      txSerialized: psbtHex,
+      mpcPayloads: payloads,
     }
+  }
+
+  async reconstructAndSendTransaction({
+    nearAuthentication,
+    path,
+    mpcSignatures,
+    txSerialized,
+    options,
+  }: {
+    nearAuthentication: NearAuthentication
+    path: KeyDerivationPath
+    mpcSignatures: MPCSignature[]
+    txSerialized?: string
+    options?: {
+      storageKey?: string
+    }
+  }): Promise<string> {
+    const { publicKey } = await fetchDerivedBTCAddressAndPublicKey({
+      signerId: nearAuthentication.accountId,
+      path,
+      btcNetworkId: this.network,
+      nearNetworkId: nearAuthentication.networkId,
+      multichainContractId: this.contract,
+    })
+
+    let psbt: bitcoin.Psbt | undefined
+    if (txSerialized) {
+      psbt = bitcoin.Psbt.fromHex(txSerialized)
+    } else if (options?.storageKey) {
+      const psbtHex = window.localStorage.getItem(options.storageKey)
+      if (psbtHex) {
+        psbt = bitcoin.Psbt.fromHex(psbtHex)
+      }
+    }
+
+    if (!psbt) {
+      throw new Error('No PSBT provided or stored in localStorage')
+    }
+
+    const keyPair = (index: number): bitcoin.Signer => ({
+      publicKey,
+      sign: () => {
+        const mpcSignature = mpcSignatures[index]
+        return Bitcoin.parseRSVSignature(toRSV(mpcSignature))
+      },
+    })
+    for (let index = 0; index < psbt.txInputs.length; index += 1) {
+      psbt.signInput(index, keyPair(index))
+    }
+
+    psbt.finalizeAllInputs()
+    const txid = await this.sendTransaction(psbt.extractTransaction().toHex())
+
+    if (txid) {
+      return txid
+    }
+    throw new Error('Failed to broadcast transaction')
   }
 }

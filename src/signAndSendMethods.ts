@@ -15,15 +15,15 @@ export const signAndSendEVMTransaction = async (
   try {
     const evm = new EVM(req.chainConfig)
 
-    const { transaction, txHash } =
-      await evm.getSerializedTransactionAndPayloadToSign({
+    const { txSerialized, mpcPayloads } =
+      await evm.getMPCPayloadAndTxSerialized({
         data: req.transaction,
         nearAuthentication: req.nearAuthentication,
         path: req.derivationPath,
       })
 
     const signature = await ChainSignaturesContract.sign({
-      hashedTx: txHash,
+      hashedTx: mpcPayloads[0].payload,
       path: req.derivationPath,
       nearAuthentication: req.nearAuthentication,
       contract: req.chainConfig.contract,
@@ -31,9 +31,9 @@ export const signAndSendEVMTransaction = async (
       keypair: keyPair,
     })
 
-    const res = await evm.reconstructSignature({
-      transactionSerialized: transaction,
-      signature,
+    const res = await evm.reconstructAndSendTransaction({
+      transactionSerialized: txSerialized,
+      mpcSignatures: [signature],
     })
 
     return {
@@ -56,15 +56,15 @@ export const signAndSendBTCTransaction = async (
   try {
     const btc = new Bitcoin(req.chainConfig)
 
-    const { hexTransaction, payloads } =
-      await btc.getSerializedTransactionAndPayloadToSign({
+    const { txSerialized, mpcPayloads } =
+      await btc.getMPCPayloadAndTxSerialized({
         data: req.transaction,
         nearAuthentication: req.nearAuthentication,
         path: req.derivationPath,
       })
 
     const signatures = await Promise.all(
-      payloads.map(
+      mpcPayloads.map(
         async ({ payload }) =>
           await ChainSignaturesContract.sign({
             hashedTx: payload,
@@ -77,11 +77,11 @@ export const signAndSendBTCTransaction = async (
       )
     )
 
-    const txid = await btc.reconstructSignature({
+    const txid = await btc.reconstructAndSendTransaction({
       nearAuthentication: req.nearAuthentication,
       path: req.derivationPath,
-      signatures,
-      psbtHex: hexTransaction,
+      mpcSignatures: signatures,
+      txSerialized,
     })
 
     return {
@@ -103,16 +103,16 @@ export const signAndSendCosmosTransaction = async (
   try {
     const cosmos = new Cosmos(req.chainConfig)
 
-    const { transaction, payloads } =
-      await cosmos.getSerializedTransactionAndPayloads({
+    const { txSerialized, mpcPayloads } =
+      await cosmos.getMPCPayloadAndTxSerialized({
         data: req.transaction,
         nearAuthentication: req.nearAuthentication,
         path: req.derivationPath,
       })
 
     const signatures = await Promise.all(
-      payloads.map(
-        async (payload) =>
+      mpcPayloads.map(
+        async ({ payload }) =>
           await ChainSignaturesContract.sign({
             hashedTx: payload,
             path: req.derivationPath,
@@ -124,11 +124,11 @@ export const signAndSendCosmosTransaction = async (
       )
     )
 
-    const txHash = await cosmos.handleTransaction({
+    const txHash = await cosmos.reconstructAndSendTransaction({
       data: req.transaction,
       nearAuthentication: req.nearAuthentication,
       path: req.derivationPath,
-      serializedTransaction: transaction,
+      txSerialized,
       mpcSignatures: signatures,
     })
 
