@@ -115,19 +115,13 @@ export class Bitcoin {
     }
   }
 
-  async handleTransaction(
-    data: BTCTransaction,
-    nearAuthentication: NearAuthentication,
-    path: KeyDerivationPath
-  ): Promise<string> {
-    const { address, publicKey } = await fetchDerivedBTCAddressAndPublicKey({
-      signerId: nearAuthentication.accountId,
-      path,
-      btcNetworkId: this.network,
-      nearNetworkId: nearAuthentication.networkId,
-      multichainContractId: this.contract,
-    })
-
+  async populatePSBT({
+    address,
+    data,
+  }: {
+    address: string
+    data: BTCTransaction
+  }): Promise<bitcoin.Psbt> {
     const { inputs, outputs } =
       data.inputs && data.outputs
         ? data
@@ -177,6 +171,32 @@ export class Bitcoin {
       }
     })
 
+    return psbt
+  }
+
+  async reconstructSignature({
+    nearAuthentication,
+    path,
+    signatures,
+    psbtHex,
+    options,
+  }: {
+    nearAuthentication: NearAuthentication
+    path: KeyDerivationPath
+    signatures: MPCSignature[]
+    psbtHex?: string
+    options?: {
+      storageKey?: string
+    }
+  }): Promise<string> {
+    const { publicKey } = await fetchDerivedBTCAddressAndPublicKey({
+      signerId: nearAuthentication.accountId,
+      path,
+      btcNetworkId: this.network,
+      nearNetworkId: nearAuthentication.networkId,
+      multichainContractId: this.contract,
+    })
+
     const keyPair = {
       publicKey,
       sign: async (hash: Buffer): Promise<Buffer> => {
@@ -186,7 +206,7 @@ export class Bitcoin {
     }
 
     // Sign inputs sequentially to avoid nonce issues
-    for (let index = 0; index < inputs.length; index += 1) {
+    for (let index = 0; index < psbt.txInputs.length; index += 1) {
       await psbt.signInputAsync(index, keyPair)
     }
 
@@ -197,5 +217,60 @@ export class Bitcoin {
       return txid
     }
     throw new Error('Failed to broadcast transaction')
+  }
+
+  async getHexTransactionAndPayloadToSign({
+    data,
+    nearAuthentication,
+    path,
+    options,
+  }: {
+    data: BTCTransaction
+    nearAuthentication: NearAuthentication
+    path: KeyDerivationPath
+    options?: {
+      storageKey?: string
+    }
+  }): Promise<{
+    hexTransaction: string
+    payloads: Array<{ index: number; payload: Uint8Array }>
+  }> {
+    const { address, publicKey } = await fetchDerivedBTCAddressAndPublicKey({
+      signerId: nearAuthentication.accountId,
+      path,
+      btcNetworkId: this.network,
+      nearNetworkId: nearAuthentication.networkId,
+      multichainContractId: this.contract,
+    })
+
+    const psbt = await this.populatePSBT({ address, data })
+    const psbtHex = psbt.toHex()
+
+    const payloads: Array<{ index: number; payload: Uint8Array }> = []
+
+    // Mock signer to get the payloads as the library doesn't expose a methods with such functionality
+    const keyPair = (index: number): bitcoin.Signer => ({
+      publicKey,
+      sign: (hash) => {
+        payloads.push({
+          index,
+          payload: hash,
+        })
+        // The return it's intentional wrong as this is a mock signer
+        return hash
+      },
+    })
+    for (let index = 0; index < psbt.txInputs.length; index += 1) {
+      psbt.signInput(index, keyPair(index))
+    }
+
+    if (options?.storageKey) {
+      window.localStorage.setItem(options.storageKey, psbt.toHex())
+    }
+
+    return {
+      hexTransaction: psbtHex,
+      payloads,
+    }
   }
 }

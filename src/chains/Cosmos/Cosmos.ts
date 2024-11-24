@@ -44,10 +44,10 @@ export class Cosmos {
     this.signer = signer
   }
 
-  private async createSigner(
+  private createSigner(
     address: string,
     publicKey: Uint8Array
-  ): Promise<OfflineDirectSigner> {
+  ): OfflineDirectSigner {
     return {
       getAccounts: async () => [
         {
@@ -119,7 +119,7 @@ export class Cosmos {
       prefix,
     })
 
-    const signer = await this.createSigner(address, publicKey)
+    const signer = this.createSigner(address, publicKey)
 
     const client = await SigningStargateClient.connectWithSigner(
       rpcUrl,
