@@ -46,6 +46,10 @@ export async function fetchDerivedEVMAddress({
     throw new Error('Failed to get derived public key')
   }
 
+  return deriveEVMAddress(derivedPubKeyNAJ)
+}
+
+export const deriveEVMAddress = (derivedPubKeyNAJ: string): string => {
   const childPublicKey = najToPubKey(derivedPubKeyNAJ, { compress: false })
 
   const publicKeyNoPrefix = childPublicKey.startsWith('04')

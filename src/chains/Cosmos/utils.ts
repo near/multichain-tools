@@ -29,20 +29,25 @@ export async function fetchDerivedCosmosAddressAndPublicKey({
     throw new Error('Failed to get derived public key')
   }
 
-  const derivedKey = najToPubKey(derivedPubKeyNAJ, { compress: true })
-  const publicKey = fromHex(derivedKey)
-  const address = pubkeyToAddress(publicKey, prefix)
-
-  return { address, publicKey: Buffer.from(publicKey) }
+  return await deriveCosmosAddress(derivedPubKeyNAJ, prefix)
 }
 
-function pubkeyToAddress(pubkey: Uint8Array, prefix: string): string {
+export const deriveCosmosAddress = async (
+  derivedPubKeyNAJ: string,
+  prefix: string
+): Promise<{
+  address: string
+  publicKey: Buffer
+}> => {
+  const derivedKey = najToPubKey(derivedPubKeyNAJ, { compress: true })
+  const publicKey = fromHex(derivedKey)
   const pubkeyRaw =
-    pubkey.length === 33 ? pubkey : Secp256k1.compressPubkey(pubkey)
+    publicKey.length === 33 ? publicKey : Secp256k1.compressPubkey(publicKey)
   const sha256Hash = sha256(pubkeyRaw)
   const ripemd160Hash = ripemd160(sha256Hash)
   const address = bech32.encode(prefix, bech32.toWords(ripemd160Hash))
-  return address
+
+  return { address, publicKey: Buffer.from(publicKey) }
 }
 
 export const fetchChainInfo = async (

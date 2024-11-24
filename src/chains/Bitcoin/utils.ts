@@ -11,6 +11,7 @@ import {
   type BitcoinPublicKeyAndAddressRequest,
   type UTXO,
   type BTCFeeRecommendation,
+  type BTCNetworkIds,
 } from './types'
 import { getCanonicalizedDerivationPath } from '../../kdf/utils'
 import { ChainSignaturesContract } from '../../signature/chain-signatures-contract'
@@ -94,6 +95,13 @@ export async function fetchDerivedBTCAddressAndPublicKey({
     throw new Error('Failed to get derived public key')
   }
 
+  return deriveBTCAddress(derivedPubKeyNAJ, btcNetworkId)
+}
+
+export const deriveBTCAddress = (
+  derivedPubKeyNAJ: string,
+  btcNetworkId: BTCNetworkIds
+): { address: string; publicKey: Buffer } => {
   const derivedKey = najToPubKey(derivedPubKeyNAJ, { compress: true })
   const publicKeyBuffer = Buffer.from(derivedKey, 'hex')
   const network = parseBTCNetwork(btcNetworkId)
