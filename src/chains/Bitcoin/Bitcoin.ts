@@ -1,15 +1,11 @@
 import axios from 'axios'
 import * as bitcoin from 'bitcoinjs-lib'
 
-import {
-  fetchBTCFeeProperties,
-  fetchDerivedBTCAddressAndPublicKey,
-  parseBTCNetwork,
-} from './utils'
+import { fetchBTCFeeProperties, parseBTCNetwork } from './utils'
 import {
   type MPCPayloads,
   type ChainSignatureContracts,
-  type NearAuthentication,
+  type NearNetworkIds,
 } from '../types'
 import { type KeyDerivationPath } from '../../kdf/types'
 import {
@@ -22,17 +18,22 @@ import {
 } from './types'
 import { toRSV } from '../../signature/utils'
 import { type RSVSignature, type MPCSignature } from '../../signature/types'
+import { ChainSignaturesContract } from '../../signature'
+import { najToPubKey } from '../../kdf/kdf'
 
 export class Bitcoin {
+  private readonly nearNetworkId: NearNetworkIds
   private readonly network: BTCNetworkIds
   private readonly providerUrl: string
   private readonly contract: ChainSignatureContracts
 
   constructor(config: {
+    nearNetworkId: NearNetworkIds
     network: BTCNetworkIds
     providerUrl: string
     contract: ChainSignatureContracts
   }) {
+    this.nearNetworkId = config.nearNetworkId
     this.network = config.network
     this.providerUrl = config.providerUrl
     this.contract = config.contract
@@ -46,16 +47,9 @@ export class Bitcoin {
     return Math.round(btc * 100000000)
   }
 
-  async fetchBalance(address: string): Promise<string> {
-    const { data } = await axios.get<BTCAddressInfo>(
-      `${this.providerUrl}/address/${address}`
-    )
-    return Bitcoin.toBTC(
-      data.chain_stats.funded_txo_sum - data.chain_stats.spent_txo_sum
-    ).toString()
-  }
-
-  async fetchTransaction(transactionId: string): Promise<bitcoin.Transaction> {
+  private async fetchTransaction(
+    transactionId: string
+  ): Promise<bitcoin.Transaction> {
     const { data } = await axios.get<Transaction>(
       `${this.providerUrl}/tx/${transactionId}`
     )
@@ -89,7 +83,7 @@ export class Bitcoin {
     return tx
   }
 
-  static parseRSVSignature(signature: RSVSignature): Buffer {
+  private static parseRSVSignature(signature: RSVSignature): Buffer {
     const r = signature.r.padStart(64, '0')
     const s = signature.s.padStart(64, '0')
 
@@ -102,21 +96,7 @@ export class Bitcoin {
     return rawSignature
   }
 
-  async sendTransaction(txHex: string): Promise<string | undefined> {
-    try {
-      const response = await axios.post<string>(`${this.providerUrl}/tx`, txHex)
-
-      if (response.status === 200) {
-        return response.data
-      }
-      throw new Error(`Failed to broadcast transaction: ${response.data}`)
-    } catch (error: unknown) {
-      console.error(error)
-      throw new Error(`Error broadcasting transaction`)
-    }
-  }
-
-  async populatePSBT({
+  private async getPSBT({
     address,
     data,
   }: {
@@ -175,35 +155,76 @@ export class Bitcoin {
     return psbt
   }
 
-  async getMPCPayloadAndTxSerialized({
-    data,
-    nearAuthentication,
+  async getBalance(address: string): Promise<string> {
+    const { data } = await axios.get<BTCAddressInfo>(
+      `${this.providerUrl}/address/${address}`
+    )
+    return Bitcoin.toBTC(
+      data.chain_stats.funded_txo_sum - data.chain_stats.spent_txo_sum
+    ).toString()
+  }
+
+  async deriveAddressAndPublicKey({
+    signerId,
     path,
-    options,
   }: {
-    data: BTCTransaction
-    nearAuthentication: NearAuthentication
+    signerId: string
     path: KeyDerivationPath
-    options?: {
-      storageKey?: string
-    }
   }): Promise<{
-    txSerialized: string
-    mpcPayloads: MPCPayloads
+    address: string
+    publicKey: string
   }> {
-    const { address, publicKey } = await fetchDerivedBTCAddressAndPublicKey({
-      signerId: nearAuthentication.accountId,
-      path,
-      btcNetworkId: this.network,
-      nearNetworkId: nearAuthentication.networkId,
-      multichainContractId: this.contract,
+    const derivedPubKeyNAJ = await ChainSignaturesContract.getDerivedPublicKey({
+      networkId: this.nearNetworkId,
+      contract: this.contract,
+      args: { path, predecessor: signerId },
     })
 
-    const psbt = await this.populatePSBT({ address, data })
-    const psbtHex = psbt.toHex()
+    if (!derivedPubKeyNAJ) {
+      throw new Error('Failed to get derived public key')
+    }
+
+    const derivedKey = najToPubKey(derivedPubKeyNAJ, { compress: true })
+    const publicKeyBuffer = Buffer.from(derivedKey, 'hex')
+    const network = parseBTCNetwork(this.network)
+
+    // Use P2WPKH (Bech32) address type
+    const payment = bitcoin.payments.p2wpkh({
+      pubkey: publicKeyBuffer,
+      network,
+    })
+
+    const { address } = payment
+
+    if (!address) {
+      throw new Error('Failed to generate Bitcoin address')
+    }
+
+    return { address, publicKey: derivedKey }
+  }
+
+  setTransaction(transaction: bitcoin.Psbt, storageKey: string): void {
+    window.localStorage.setItem(storageKey, transaction.toHex())
+  }
+
+  getTransaction(storageKey: string): bitcoin.Psbt | undefined {
+    const txSerialized = window.localStorage.getItem(storageKey)
+    return txSerialized ? bitcoin.Psbt.fromHex(txSerialized) : undefined
+  }
+
+  async getMPCPayloadAndTransaction(
+    transactionRequest: BTCTransaction
+  ): Promise<{
+    transaction: bitcoin.Psbt
+    mpcPayloads: MPCPayloads
+  }> {
+    const publicKey = Buffer.from(transactionRequest.publicKey, 'hex')
+    const psbt = await this.getPSBT({
+      address: transactionRequest.from,
+      data: transactionRequest,
+    })
 
     const payloads: MPCPayloads = []
-
     // Mock signer to get the payloads as the library doesn't expose a methods with such functionality
     const keyPair = (index: number): bitcoin.Signer => ({
       publicKey,
@@ -217,58 +238,28 @@ export class Bitcoin {
       },
     })
     for (let index = 0; index < psbt.txInputs.length; index += 1) {
+      // TODO: check if you can double sign it, otherwise you will have to clone the psbt before signing
       psbt.signInput(index, keyPair(index))
     }
 
-    if (options?.storageKey) {
-      window.localStorage.setItem(options.storageKey, psbt.toHex())
-    }
-
     return {
-      txSerialized: psbtHex,
-      mpcPayloads: payloads,
+      transaction: psbt,
+      mpcPayloads: payloads.sort((a, b) => a.index - b.index),
     }
   }
 
-  async reconstructAndSendTransaction({
-    nearAuthentication,
-    path,
+  async addSignatureAndBroadcast({
+    transaction: psbt,
     mpcSignatures,
-    txSerialized,
-    options,
+    publicKey,
   }: {
-    nearAuthentication: NearAuthentication
-    path: KeyDerivationPath
+    transaction: bitcoin.Psbt
     mpcSignatures: MPCSignature[]
-    txSerialized?: string
-    options?: {
-      storageKey?: string
-    }
+    publicKey: string
   }): Promise<string> {
-    const { publicKey } = await fetchDerivedBTCAddressAndPublicKey({
-      signerId: nearAuthentication.accountId,
-      path,
-      btcNetworkId: this.network,
-      nearNetworkId: nearAuthentication.networkId,
-      multichainContractId: this.contract,
-    })
-
-    let psbt: bitcoin.Psbt | undefined
-    if (txSerialized) {
-      psbt = bitcoin.Psbt.fromHex(txSerialized)
-    } else if (options?.storageKey) {
-      const psbtHex = window.localStorage.getItem(options.storageKey)
-      if (psbtHex) {
-        psbt = bitcoin.Psbt.fromHex(psbtHex)
-      }
-    }
-
-    if (!psbt) {
-      throw new Error('No PSBT provided or stored in localStorage')
-    }
-
+    const publicKeyBuffer = Buffer.from(publicKey, 'hex')
     const keyPair = (index: number): bitcoin.Signer => ({
-      publicKey,
+      publicKey: publicKeyBuffer,
       sign: () => {
         const mpcSignature = mpcSignatures[index]
         return Bitcoin.parseRSVSignature(toRSV(mpcSignature))
@@ -279,11 +270,21 @@ export class Bitcoin {
     }
 
     psbt.finalizeAllInputs()
-    const txid = await this.sendTransaction(psbt.extractTransaction().toHex())
 
-    if (txid) {
-      return txid
+    try {
+      const response = await axios.post<string>(
+        `${this.providerUrl}/tx`,
+        psbt.extractTransaction().toHex()
+      )
+
+      if (response.status === 200) {
+        return response.data
+      }
+
+      throw new Error(`Failed to broadcast transaction: ${response.data}`)
+    } catch (error: unknown) {
+      console.error(error)
+      throw new Error(`Error broadcasting transaction`)
     }
-    throw new Error('Failed to broadcast transaction')
   }
 }

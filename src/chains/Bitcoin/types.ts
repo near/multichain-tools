@@ -73,6 +73,8 @@ interface BtcInputsAndOutputs {
 }
 
 export type BTCTransaction = {
+  from: string
+  publicKey: string
   to: string
   value: string
 } & (

@@ -7,7 +7,9 @@ import {
 } from '../types'
 import { type KeyDerivationPath } from '../../kdf/types'
 
-export type EVMTransaction = ethers.TransactionLike
+export type EVMTransaction = Omit<ethers.TransactionLike, 'from'> & {
+  from: string
+}
 
 export type EVMChainConfigWithProviders = ChainProvider
 

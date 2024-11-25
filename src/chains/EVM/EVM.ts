@@ -1,68 +1,39 @@
 import { ethers, keccak256 } from 'ethers'
-
-import { fetchDerivedEVMAddress, fetchEVMFeeProperties } from './utils'
+import { fetchEVMFeeProperties } from './utils'
 import {
   type MPCPayloads,
   type ChainSignatureContracts,
-  type NearAuthentication,
+  type NearNetworkIds,
 } from '../types'
 import { type EVMTransaction } from './types'
 import { type KeyDerivationPath } from '../../kdf/types'
 import { toRSV } from '../../signature/utils'
-import { type MPCSignature, type RSVSignature } from '../../signature/types'
+import { type RSVSignature, type MPCSignature } from '../../signature/types'
+import { ChainSignaturesContract } from '../../signature'
+import { najToPubKey } from '../../kdf/kdf'
 
 export class EVM {
   private readonly provider: ethers.JsonRpcProvider
   private readonly contract: ChainSignatureContracts
+  private readonly nearNetworkId: NearNetworkIds
 
   constructor(config: {
     providerUrl: string
     contract: ChainSignatureContracts
+    nearNetworkId: NearNetworkIds
   }) {
     this.provider = new ethers.JsonRpcProvider(config.providerUrl)
     this.contract = config.contract
-  }
-
-  static prepareTransactionForSignature(
-    transaction: ethers.TransactionLike
-  ): Uint8Array {
-    const txSerialized = ethers.Transaction.from(transaction).unsignedSerialized
-    const transactionHash = keccak256(txSerialized)
-
-    return new Uint8Array(ethers.getBytes(transactionHash))
-  }
-
-  async sendSignedTransaction(
-    transaction: ethers.TransactionLike,
-    signature: ethers.SignatureLike
-  ): Promise<ethers.TransactionResponse> {
-    try {
-      const txSerialized = ethers.Transaction.from({
-        ...transaction,
-        signature,
-      }).serialized
-      return await this.provider.broadcastTransaction(txSerialized)
-    } catch (error) {
-      console.error('Transaction execution failed:', error)
-      throw new Error('Failed to send signed transaction.')
-    }
+    this.nearNetworkId = config.nearNetworkId
   }
 
   async attachGasAndNonce(
-    transaction: Omit<EVMTransaction, 'from'> & { from: string }
+    transaction: EVMTransaction
   ): Promise<ethers.TransactionLike> {
-    const hasUserProvidedGas =
-      transaction.gasLimit &&
-      transaction.maxFeePerGas &&
-      transaction.maxPriorityFeePerGas
-
-    const { gasLimit, maxFeePerGas, maxPriorityFeePerGas } = hasUserProvidedGas
-      ? transaction
-      : await fetchEVMFeeProperties(
-          this.provider._getConnection().url,
-          transaction
-        )
-
+    const fees = await fetchEVMFeeProperties(
+      this.provider._getConnection().url,
+      transaction
+    )
     const nonce = await this.provider.getTransactionCount(
       transaction.from,
       'latest'
@@ -71,13 +42,50 @@ export class EVM {
     const { from, ...rest } = transaction
 
     return {
-      gasLimit,
-      maxFeePerGas,
-      maxPriorityFeePerGas,
+      ...fees,
       chainId: this.provider._network.chainId,
       nonce,
       type: 2,
       ...rest,
+    }
+  }
+
+  private parseSignature(signature: RSVSignature): ethers.SignatureLike {
+    return ethers.Signature.from({
+      r: `0x${signature.r}`,
+      s: `0x${signature.s}`,
+      v: signature.v,
+    })
+  }
+
+  async deriveAddressAndPublicKey(
+    signerId: string,
+    path: KeyDerivationPath
+  ): Promise<{
+    address: string
+    publicKey: string
+  }> {
+    const derivedPubKeyNAJ = await ChainSignaturesContract.getDerivedPublicKey({
+      networkId: this.nearNetworkId,
+      contract: this.contract,
+      args: { path, predecessor: signerId },
+    })
+
+    if (!derivedPubKeyNAJ) {
+      throw new Error('Failed to get derived public key')
+    }
+
+    const childPublicKey = najToPubKey(derivedPubKeyNAJ, { compress: false })
+
+    const publicKeyNoPrefix = childPublicKey.startsWith('04')
+      ? childPublicKey.substring(2)
+      : childPublicKey
+
+    const hash = ethers.keccak256(Buffer.from(publicKeyNoPrefix, 'hex'))
+
+    return {
+      address: `0x${hash.substring(hash.length - 40)}`,
+      publicKey: childPublicKey,
     }
   }
 
@@ -91,63 +99,34 @@ export class EVM {
     }
   }
 
-  parseRSVSignature(rsvSignature: RSVSignature): ethers.Signature {
-    const r = `0x${rsvSignature.r}`
-    const s = `0x${rsvSignature.s}`
-    const v = rsvSignature.v
-
-    return ethers.Signature.from({ r, s, v })
-  }
-
-  async getMPCPayloadAndTxSerialized({
-    data,
-    nearAuthentication,
-    path,
-    options,
-  }: {
-    data: EVMTransaction
-    nearAuthentication: NearAuthentication
-    path: KeyDerivationPath
-    options?: {
-      storageKey?: string
-    }
-  }): Promise<{
-    txSerialized: string
-    mpcPayloads: MPCPayloads
-  }> {
-    console.log('v3 test')
-    const derivedFrom = await fetchDerivedEVMAddress({
-      signerId: nearAuthentication.accountId,
-      path,
-      nearNetworkId: nearAuthentication.networkId,
-      multichainContractId: this.contract,
-    })
-
-    if (data.from && data.from.toLowerCase() !== derivedFrom.toLowerCase()) {
-      throw new Error(
-        'Provided "from" address does not match the derived address'
-      )
-    }
-
-    const from = data.from || derivedFrom
-
-    const transaction = await this.attachGasAndNonce({
-      ...data,
-      from,
-    })
-
-    const txHash = EVM.prepareTransactionForSignature(transaction)
-
-    const txSerialized = JSON.stringify(transaction, (_, value) =>
+  setTransaction(
+    transaction: ethers.TransactionLike,
+    storageKey: string
+  ): void {
+    const serializedTransaction = JSON.stringify(transaction, (_, value) =>
       typeof value === 'bigint' ? value.toString() : value
     )
+    window.localStorage.setItem(storageKey, serializedTransaction)
+  }
 
-    if (options?.storageKey) {
-      window.localStorage.setItem(options.storageKey, txSerialized)
-    }
+  getTransaction(storageKey: string): ethers.TransactionLike | undefined {
+    const txSerialized = window.localStorage.getItem(storageKey)
+    return txSerialized ? JSON.parse(txSerialized) : undefined
+  }
+
+  async getMPCPayloadAndTransaction(
+    transactionRequest: EVMTransaction
+  ): Promise<{
+    transaction: ethers.TransactionLike
+    mpcPayloads: MPCPayloads
+  }> {
+    const transaction = await this.attachGasAndNonce(transactionRequest)
+    const txSerialized = ethers.Transaction.from(transaction).unsignedSerialized
+    const transactionHash = keccak256(txSerialized)
+    const txHash = new Uint8Array(ethers.getBytes(transactionHash))
 
     return {
-      txSerialized,
+      transaction,
       mpcPayloads: [
         {
           index: 0,
@@ -157,34 +136,24 @@ export class EVM {
     }
   }
 
-  async reconstructAndSendTransaction({
-    txSerialized,
+  async addSignatureAndBroadcast({
+    transaction,
     mpcSignatures,
-    options,
   }: {
-    txSerialized?: string
+    transaction: ethers.TransactionLike
     mpcSignatures: MPCSignature[]
-    options?: {
-      storageKey?: string
-    }
   }): Promise<string> {
-    const transactionData =
-      txSerialized ??
-      (options?.storageKey
-        ? window.localStorage.getItem(options.storageKey)
-        : null)
+    try {
+      const txSerialized = ethers.Transaction.from({
+        ...transaction,
+        signature: this.parseSignature(toRSV(mpcSignatures[0])),
+      }).serialized
+      const txResponse = await this.provider.broadcastTransaction(txSerialized)
 
-    if (!transactionData) {
-      throw new Error('No transaction data provided and none found in storage')
+      return txResponse.hash
+    } catch (error) {
+      console.error('Transaction execution failed:', error)
+      throw new Error('Failed to send signed transaction.')
     }
-
-    const transaction: ethers.TransactionLike = JSON.parse(transactionData)
-
-    const transactionResponse = await this.sendSignedTransaction(
-      transaction,
-      this.parseRSVSignature(toRSV(mpcSignatures[0]))
-    )
-
-    return transactionResponse.hash
   }
 }

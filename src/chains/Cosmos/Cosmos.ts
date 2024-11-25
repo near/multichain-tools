@@ -1,6 +1,7 @@
 import {
   GasPrice,
   SigningStargateClient,
+  StargateClient,
   type StdFee,
   assertIsDeliverTxSuccess,
   calculateFee,
@@ -13,100 +14,142 @@ import {
 } from '@cosmjs/proto-signing'
 import { type SignDoc } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { toBase64, fromHex } from '@cosmjs/encoding'
-import { sha256 } from '@cosmjs/crypto'
+import { ripemd160, sha256 } from '@cosmjs/crypto'
 
-import { fetchChainInfo, fetchDerivedCosmosAddressAndPublicKey } from './utils'
+import { fetchChainInfo } from './utils'
 import {
   type MPCPayloads,
   type ChainSignatureContracts,
-  type NearAuthentication,
+  type NearNetworkIds,
 } from '../types'
-import { type KeyDerivationPath } from '../../kdf/types'
 import { type CosmosTransaction, type CosmosNetworkIds } from './types'
 import { type MPCSignature, type RSVSignature } from '../../signature/types'
 import { toRSV } from '../../signature/utils'
+import { bech32 } from 'bech32'
+import { najToPubKey } from '../../kdf/kdf'
+import { ChainSignaturesContract } from '../../signature'
 
 export class Cosmos {
+  private readonly nearNetworkId: NearNetworkIds
   private readonly registry: Registry
   private readonly contract: ChainSignatureContracts
   private readonly chainId: CosmosNetworkIds
-  // TODO: should include providerUrl, so the user can choose rpc
 
   constructor({
+    nearNetworkId,
     contract,
     chainId,
   }: {
+    nearNetworkId: NearNetworkIds
     contract: ChainSignatureContracts
     chainId: CosmosNetworkIds
   }) {
+    this.nearNetworkId = nearNetworkId
     this.registry = new Registry()
     this.contract = contract
     this.chainId = chainId
   }
 
-  parseRSVSignature(rsvSignature: RSVSignature): Uint8Array {
+  private parseRSVSignature(rsvSignature: RSVSignature): Uint8Array {
     return new Uint8Array([
       ...fromHex(rsvSignature.r),
       ...fromHex(rsvSignature.s),
     ])
   }
 
-  private createFee(denom: string, gasPrice: number, gas?: number): StdFee {
-    const gasLimit = gas || 200_000
-    return calculateFee(gasLimit, GasPrice.fromString(`${gasPrice}${denom}`))
-  }
+  async getBalance(
+    address: string,
+    chainId: CosmosNetworkIds
+  ): Promise<string> {
+    try {
+      const { restUrl, denom } = await fetchChainInfo(chainId)
+      const client = await StargateClient.connect(restUrl)
 
-  private updateMessages(
-    messages: EncodeObject[],
-    address: string
-  ): EncodeObject[] {
-    return messages.map((msg) =>
-      !msg.value.fromAddress
-        ? { ...msg, value: { ...msg.value, fromAddress: address } }
-        : msg
-    )
-  }
+      const balance = await client.getBalance(address, denom)
 
-  async getMPCPayloadAndTxSerialized({
-    data,
-    nearAuthentication,
-    path,
-    options,
-  }: {
-    data: CosmosTransaction
-    nearAuthentication: NearAuthentication
-    path: KeyDerivationPath
-    options?: {
-      storageKey?: string
+      return balance.amount
+    } catch (error) {
+      console.error('Failed to fetch Cosmos balance:', error)
+      throw new Error('Failed to fetch Cosmos balance')
     }
-  }): Promise<{
-    txSerialized: string
+  }
+
+  async deriveAddressAndPublicKey(
+    signerId: string,
+    path: string,
+    prefix: string
+  ): Promise<{
+    address: string
+    publicKey: string
+  }> {
+    const derivedPubKeyNAJ = await ChainSignaturesContract.getDerivedPublicKey({
+      networkId: this.nearNetworkId,
+      contract: this.contract,
+      args: { path, predecessor: signerId },
+    })
+
+    if (!derivedPubKeyNAJ) {
+      throw new Error('Failed to get derived public key')
+    }
+
+    const derivedKey = najToPubKey(derivedPubKeyNAJ, { compress: true })
+    const pubKeySha256 = sha256(Buffer.from(fromHex(derivedKey)))
+    const ripemd160Hash = ripemd160(pubKeySha256)
+    const address = bech32.encode(prefix, bech32.toWords(ripemd160Hash))
+
+    return { address, publicKey: derivedKey }
+  }
+
+  setTransaction(
+    transaction: {
+      address: string
+      messages: EncodeObject[]
+      memo?: string
+      fee: StdFee
+    },
+    storageKey: string
+  ): void {
+    window.localStorage.setItem(storageKey, JSON.stringify(transaction))
+  }
+
+  getTransaction(storageKey: string):
+    | {
+        address: string
+        messages: EncodeObject[]
+        memo?: string
+        fee: StdFee
+      }
+    | undefined {
+    const serializedTransaction = window.localStorage.getItem(storageKey)
+    return serializedTransaction ? JSON.parse(serializedTransaction) : undefined
+  }
+
+  async getMPCPayloadAndTransaction(
+    transactionRequest: CosmosTransaction
+  ): Promise<{
+    transaction: {
+      address: string
+      messages: EncodeObject[]
+      fee: StdFee
+      memo?: string
+    }
     mpcPayloads: MPCPayloads
   }> {
-    const { prefix, denom, rpcUrl, gasPrice } = await fetchChainInfo(
-      this.chainId
-    )
-
-    const { address, publicKey } = await fetchDerivedCosmosAddressAndPublicKey({
-      signerId: nearAuthentication.accountId,
-      path,
-      nearNetworkId: nearAuthentication.networkId,
-      multichainContractId: this.contract,
-      prefix,
-    })
+    const { denom, rpcUrl, gasPrice } = await fetchChainInfo(this.chainId)
+    const publicKeyBuffer = Buffer.from(transactionRequest.publicKey, 'hex')
 
     // Mock signer to get the payloads as the library doesn't expose a methods with such functionality
     const payloads: Uint8Array[] = []
     const signer: OfflineDirectSigner = {
       getAccounts: async () => [
         {
-          address,
+          address: transactionRequest.address,
           algo: 'secp256k1',
-          pubkey: publicKey,
+          pubkey: publicKeyBuffer,
         },
       ],
       signDirect: async (signerAddress: string, signDoc: SignDoc) => {
-        if (signerAddress !== address) {
+        if (signerAddress !== transactionRequest.address) {
           throw new Error(`Address ${signerAddress} not found in wallet`)
         }
 
@@ -118,7 +161,7 @@ export class Cosmos {
           signature: {
             pub_key: {
               type: 'tendermint/PubKeySecp256k1',
-              value: toBase64(publicKey),
+              value: toBase64(publicKeyBuffer),
             },
             // The return it's intentionally wrong as this is a mock signer
             signature: toBase64(txHash),
@@ -136,24 +179,34 @@ export class Cosmos {
       }
     )
 
-    const fee = this.createFee(denom, gasPrice, data.gas)
-    const updatedMessages = this.updateMessages(data.messages, address)
+    const gasLimit = transactionRequest.gas || 200_000
+    const fee = calculateFee(
+      gasLimit,
+      GasPrice.fromString(`${gasPrice}${denom}`)
+    )
+    const updatedMessages = transactionRequest.messages.map((msg) =>
+      !msg.value.fromAddress
+        ? {
+            ...msg,
+            value: { ...msg.value, fromAddress: transactionRequest.address },
+          }
+        : msg
+    )
 
-    await client.sign(address, updatedMessages, fee, data.memo || '')
-
-    const serializedTransaction = JSON.stringify({
-      address,
-      messages: updatedMessages,
+    await client.sign(
+      transactionRequest.address,
+      updatedMessages,
       fee,
-      memo: data.memo,
-    })
-
-    if (options?.storageKey) {
-      window.localStorage.setItem(options.storageKey, serializedTransaction)
-    }
+      transactionRequest.memo || ''
+    )
 
     return {
-      txSerialized: serializedTransaction,
+      transaction: {
+        address: transactionRequest.address,
+        messages: updatedMessages,
+        fee,
+        memo: transactionRequest.memo,
+      },
       mpcPayloads: payloads.map((payload, index) => ({
         index,
         payload,
@@ -161,71 +214,33 @@ export class Cosmos {
     }
   }
 
-  async reconstructAndSendTransaction({
-    nearAuthentication,
-    path,
-    txSerialized,
+  async addSignatureAndBroadcast({
+    transaction,
     mpcSignatures,
-    options,
+    publicKey,
   }: {
-    data: CosmosTransaction
-    nearAuthentication: NearAuthentication
-    path: KeyDerivationPath
-    txSerialized?: string
-    mpcSignatures: MPCSignature[]
-    options?: {
-      storageKey?: string
-    }
-  }): Promise<string> {
-    const { prefix, denom, rpcUrl, gasPrice } = await fetchChainInfo(
-      this.chainId
-    )
-
-    const { publicKey } = await fetchDerivedCosmosAddressAndPublicKey({
-      signerId: nearAuthentication.accountId,
-      path,
-      nearNetworkId: nearAuthentication.networkId,
-      multichainContractId: this.contract,
-      prefix,
-    })
-
-    let transaction: string | undefined
-    if (txSerialized) {
-      transaction = txSerialized
-    } else if (options?.storageKey) {
-      const storageTransaction = window.localStorage.getItem(options.storageKey)
-      if (!storageTransaction) {
-        throw new Error('No transaction found in storage')
-      }
-      transaction = storageTransaction
-    }
-
-    if (!transaction) {
-      throw new Error('No transaction found')
-    }
-
-    const {
-      address,
-      messages: updatedMessages,
-      memo,
-      fee,
-    }: {
+    transaction: {
       address: string
       messages: EncodeObject[]
       memo?: string
       fee: StdFee
-    } = JSON.parse(transaction)
+    }
+    mpcSignatures: MPCSignature[]
+    publicKey: string
+  }): Promise<string> {
+    const { denom, rpcUrl, gasPrice } = await fetchChainInfo(this.chainId)
+    const publicKeyBuffer = Buffer.from(publicKey, 'hex')
 
     const signer: OfflineDirectSigner = {
       getAccounts: async () => [
         {
-          address,
+          address: transaction.address,
           algo: 'secp256k1',
-          pubkey: publicKey,
+          pubkey: publicKeyBuffer,
         },
       ],
       signDirect: async (signerAddress: string, signDoc: SignDoc) => {
-        if (signerAddress !== address) {
+        if (signerAddress !== transaction.address) {
           throw new Error(`Address ${signerAddress} not found in wallet`)
         }
 
@@ -237,7 +252,7 @@ export class Cosmos {
           signature: {
             pub_key: {
               type: 'tendermint/PubKeySecp256k1',
-              value: toBase64(publicKey),
+              value: toBase64(publicKeyBuffer),
             },
             signature: toBase64(signature),
           },
@@ -255,10 +270,10 @@ export class Cosmos {
     )
 
     const result = await client.signAndBroadcast(
-      address,
-      updatedMessages,
-      fee,
-      memo || ''
+      transaction.address,
+      transaction.messages,
+      transaction.fee,
+      transaction.memo || ''
     )
     assertIsDeliverTxSuccess(result)
 

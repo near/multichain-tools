@@ -11,6 +11,8 @@ import { type EncodeObject } from '@cosmjs/proto-signing'
 export type CosmosNetworkIds = string
 
 export interface CosmosTransaction {
+  address: string
+  publicKey: string
   messages: EncodeObject[] // Array of messages (EncodeObject)
   memo?: string
   gas?: number

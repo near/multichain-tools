@@ -1,9 +1,5 @@
 import { ethers } from 'ethers'
 
-import { ChainSignaturesContract } from '../../signature'
-import { type FetchEVMAddressRequest } from './types'
-import { najToPubKey } from '../../kdf/kdf'
-
 export async function fetchEVMFeeProperties(
   providerUrl: string,
   transaction: ethers.TransactionLike
@@ -27,35 +23,4 @@ export async function fetchEVMFeeProperties(
     maxPriorityFeePerGas,
     maxFee: maxFeePerGas * gasLimit,
   }
-}
-
-export async function fetchDerivedEVMAddress({
-  signerId,
-  path,
-  nearNetworkId,
-  multichainContractId,
-}: FetchEVMAddressRequest): Promise<string> {
-  const derivedPubKeyNAJ = await ChainSignaturesContract.getDerivedPublicKey({
-    networkId: nearNetworkId,
-    contract: multichainContractId,
-    args: { path, predecessor: signerId },
-  })
-
-  if (!derivedPubKeyNAJ) {
-    throw new Error('Failed to get derived public key')
-  }
-
-  return deriveEVMAddress(derivedPubKeyNAJ)
-}
-
-export const deriveEVMAddress = (derivedPubKeyNAJ: string): string => {
-  const childPublicKey = najToPubKey(derivedPubKeyNAJ, { compress: false })
-
-  const publicKeyNoPrefix = childPublicKey.startsWith('04')
-    ? childPublicKey.substring(2)
-    : childPublicKey
-
-  const hash = ethers.keccak256(Buffer.from(publicKeyNoPrefix, 'hex'))
-
-  return `0x${hash.substring(hash.length - 40)}`
 }
