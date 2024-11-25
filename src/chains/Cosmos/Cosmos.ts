@@ -16,7 +16,11 @@ import { toBase64, fromHex } from '@cosmjs/encoding'
 import { sha256 } from '@cosmjs/crypto'
 
 import { fetchChainInfo, fetchDerivedCosmosAddressAndPublicKey } from './utils'
-import { type ChainSignatureContracts, type NearAuthentication } from '../types'
+import {
+  type MPCPayloads,
+  type ChainSignatureContracts,
+  type NearAuthentication,
+} from '../types'
 import { type KeyDerivationPath } from '../../kdf/types'
 import { type CosmosTransaction, type CosmosNetworkIds } from './types'
 import { type MPCSignature, type RSVSignature } from '../../signature/types'
@@ -77,7 +81,7 @@ export class Cosmos {
     }
   }): Promise<{
     txSerialized: string
-    mpcPayloads: Array<{ index: number; payload: Uint8Array }>
+    mpcPayloads: MPCPayloads
   }> {
     const { prefix, denom, rpcUrl, gasPrice } = await fetchChainInfo(
       this.chainId

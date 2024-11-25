@@ -1,7 +1,11 @@
 import { ethers, keccak256 } from 'ethers'
 
 import { fetchDerivedEVMAddress, fetchEVMFeeProperties } from './utils'
-import { type ChainSignatureContracts, type NearAuthentication } from '../types'
+import {
+  type MPCPayloads,
+  type ChainSignatureContracts,
+  type NearAuthentication,
+} from '../types'
 import { type EVMTransaction } from './types'
 import { type KeyDerivationPath } from '../../kdf/types'
 import { toRSV } from '../../signature/utils'
@@ -109,7 +113,7 @@ export class EVM {
     }
   }): Promise<{
     txSerialized: string
-    mpcPayloads: Array<{ index: number; payload: Uint8Array }>
+    mpcPayloads: MPCPayloads
   }> {
     console.log('v3 test')
     const derivedFrom = await fetchDerivedEVMAddress({

@@ -1,73 +1,86 @@
-import { type Account } from '@near-js/accounts'
-import {
-  actionCreators,
-  type SignedDelegate,
-  type Action,
-} from '@near-js/transactions'
+import type {
+  Action,
+  FinalExecutionOutcome,
+  NetworkId,
+} from '@near-wallet-selector/core'
+import { type MPCPayloads, type ChainSignatureContracts } from '../chains/types'
+import { type KeyDerivationPath } from '../kdf/types'
+import { ChainSignaturesContract } from './ChainSignaturesContract/ChainSignaturesContract'
+import { type MPCSignature } from './types'
+import { type ExecutionOutcomeWithId } from 'near-api-js/lib/providers'
 import { NEAR_MAX_GAS } from './utils'
-import type BN from 'bn.js'
 
-export interface NearTransactionPayload {
-  receiverId: string
-  actions: Array<{
-    methodName: string
-    args: Record<string, unknown>
-    deposit?: string
-    gas?: string
-  }>
-}
+export const nearWallet = {
+  utils: {
+    mpcPayloadsToTransaction: async ({
+      networkId,
+      contractId,
+      mpcPayloads,
+      path,
+    }: {
+      networkId: NetworkId
+      contractId: ChainSignatureContracts
+      mpcPayloads: MPCPayloads
+      path: KeyDerivationPath
+    }): Promise<{
+      receiverId: string
+      actions: Action[]
+    }> => {
+      const currentContractFee = await ChainSignaturesContract.getCurrentFee({
+        networkId,
+        contract: contractId,
+      })
 
-export interface NearTransactionOptions {
-  receiverId: string
-  actions: Action[]
-  signerId?: string
-}
-
-export const near = {
-  prepareTransaction: ({
-    account,
-    payload,
-    deposit,
-  }: {
-    account: Account
-    payload: NearTransactionPayload
-    deposit?: BN
-  }): NearTransactionOptions => {
-    const actions: Action[] = payload.actions.map((action) => {
-      return actionCreators.functionCall(
-        action.methodName,
-        action.args,
-        BigInt(action.gas || NEAR_MAX_GAS.toString()),
-        BigInt(action.deposit || deposit?.toString() || '0')
+      return {
+        receiverId: contractId,
+        actions: mpcPayloads.map(({ payload }) => ({
+          type: 'FunctionCall',
+          params: {
+            methodName: 'sign',
+            args: {
+              request: {
+                payload: Array.from(payload),
+                path,
+                key_version: 0,
+              },
+            },
+            gas: NEAR_MAX_GAS.toString(),
+            deposit: currentContractFee?.toString() || '1',
+          },
+        })),
+      }
+    },
+    responseToMpcSignature: ({
+      response,
+    }: {
+      response: FinalExecutionOutcome
+    }): MPCSignature | undefined => {
+      const signature: string = response.receipts_outcome.reduce<string>(
+        (acc: string, curr: ExecutionOutcomeWithId) => {
+          if (acc) {
+            return acc
+          }
+          const { status } = curr.outcome
+          return (
+            (typeof status === 'object' &&
+              status.SuccessValue &&
+              status.SuccessValue !== '' &&
+              Buffer.from(status.SuccessValue, 'base64').toString('utf-8')) ||
+            ''
+          )
+        },
+        ''
       )
-    })
 
-    return {
-      receiverId: payload.receiverId,
-      actions,
-      signerId: account.accountId,
-    }
-  },
+      if (signature) {
+        const parsedJSONSignature = JSON.parse(signature) as {
+          Ok: MPCSignature
+        }
 
-  prepareSignedDelegate: async ({
-    account,
-    payload,
-    deposit,
-  }: {
-    account: Account
-    payload: NearTransactionPayload
-    deposit?: BN
-  }): Promise<SignedDelegate> => {
-    const { receiverId, actions } = near.prepareTransaction({
-      account,
-      payload,
-      deposit,
-    })
-
-    return await account.signedDelegate({
-      receiverId,
-      actions,
-      blockHeightTtl: 60,
-    })
+        return parsedJSONSignature.Ok
+      } else {
+        return undefined
+      }
+    },
   },
 }

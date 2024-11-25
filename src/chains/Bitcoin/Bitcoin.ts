@@ -6,7 +6,11 @@ import {
   fetchDerivedBTCAddressAndPublicKey,
   parseBTCNetwork,
 } from './utils'
-import { type ChainSignatureContracts, type NearAuthentication } from '../types'
+import {
+  type MPCPayloads,
+  type ChainSignatureContracts,
+  type NearAuthentication,
+} from '../types'
 import { type KeyDerivationPath } from '../../kdf/types'
 import {
   type BTCNetworkIds,
@@ -185,7 +189,7 @@ export class Bitcoin {
     }
   }): Promise<{
     txSerialized: string
-    mpcPayloads: Array<{ index: number; payload: Uint8Array }>
+    mpcPayloads: MPCPayloads
   }> {
     const { address, publicKey } = await fetchDerivedBTCAddressAndPublicKey({
       signerId: nearAuthentication.accountId,
@@ -198,7 +202,7 @@ export class Bitcoin {
     const psbt = await this.populatePSBT({ address, data })
     const psbtHex = psbt.toHex()
 
-    const payloads: Array<{ index: number; payload: Uint8Array }> = []
+    const payloads: MPCPayloads = []
 
     // Mock signer to get the payloads as the library doesn't expose a methods with such functionality
     const keyPair = (index: number): bitcoin.Signer => ({

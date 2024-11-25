@@ -29,3 +29,5 @@ interface FailureResponse {
 export type Response = SuccessResponse | FailureResponse
 
 export type NearNetworkIds = 'mainnet' | 'testnet'
+
+export type MPCPayloads = Array<{ index: number; payload: Uint8Array }>
