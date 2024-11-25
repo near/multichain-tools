@@ -13,7 +13,6 @@ import {
 import { parseSignedDelegateForRelayer } from '../../relayer'
 import { type ExecutionOutcomeWithId } from 'near-api-js/lib/providers'
 import { type KeyDerivationPath } from '../../kdf/types'
-import { getCanonicalizedDerivationPath } from '../../kdf/utils'
 import { type KeyPair } from '@near-js/crypto'
 
 interface SignArgs {
@@ -131,7 +130,7 @@ export const ChainSignaturesContract = {
 
     const mpcPayload = {
       payload: Array.from(ethers.getBytes(hashedTx)),
-      path: getCanonicalizedDerivationPath(path),
+      path,
       key_version: 0,
     }
 

@@ -6,9 +6,8 @@ import { type EVMTransaction } from './types'
 import { type KeyDerivationPath } from '../../kdf/types'
 import { toRSV } from '../../signature/utils'
 import { type MPCSignature, type RSVSignature } from '../../signature/types'
-import { type Chain } from '../Chain'
 
-export class EVM implements Chain<EVMTransaction, ethers.TransactionResponse> {
+export class EVM {
   private readonly provider: ethers.JsonRpcProvider
   private readonly contract: ChainSignatureContracts
 
@@ -164,7 +163,7 @@ export class EVM implements Chain<EVMTransaction, ethers.TransactionResponse> {
     options?: {
       storageKey?: string
     }
-  }): Promise<ethers.TransactionResponse> {
+  }): Promise<string> {
     const transactionData =
       txSerialized ??
       (options?.storageKey
@@ -182,6 +181,6 @@ export class EVM implements Chain<EVMTransaction, ethers.TransactionResponse> {
       this.parseRSVSignature(toRSV(mpcSignatures[0]))
     )
 
-    return transactionResponse
+    return transactionResponse.hash
   }
 }

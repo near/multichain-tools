@@ -3,7 +3,6 @@ import { Secp256k1, sha256, ripemd160 } from '@cosmjs/crypto'
 import { bech32 } from 'bech32'
 
 import { najToPubKey } from '../../kdf/kdf'
-import { getCanonicalizedDerivationPath } from '../../kdf/utils'
 import { type CosmosPublicKeyAndAddressRequest } from './types'
 import { chains } from 'chain-registry'
 import { StargateClient } from '@cosmjs/stargate'
@@ -22,7 +21,7 @@ export async function fetchDerivedCosmosAddressAndPublicKey({
   const derivedPubKeyNAJ = await ChainSignaturesContract.getDerivedPublicKey({
     networkId: nearNetworkId,
     contract: multichainContractId,
-    args: { path: getCanonicalizedDerivationPath(path), predecessor: signerId },
+    args: { path, predecessor: signerId },
   })
 
   if (!derivedPubKeyNAJ) {

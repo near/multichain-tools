@@ -18,9 +18,8 @@ import {
 } from './types'
 import { toRSV } from '../../signature/utils'
 import { type RSVSignature, type MPCSignature } from '../../signature/types'
-import { type Chain } from '../Chain'
 
-export class Bitcoin implements Chain<BTCTransaction, string> {
+export class Bitcoin {
   private readonly network: BTCNetworkIds
   private readonly providerUrl: string
   private readonly contract: ChainSignatureContracts

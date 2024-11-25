@@ -13,7 +13,6 @@ import {
   type BTCFeeRecommendation,
   type BTCNetworkIds,
 } from './types'
-import { getCanonicalizedDerivationPath } from '../../kdf/utils'
 import { ChainSignaturesContract } from '../../signature/ChainSignaturesContract/ChainSignaturesContract'
 import { najToPubKey } from '../../kdf/kdf'
 
@@ -88,7 +87,7 @@ export async function fetchDerivedBTCAddressAndPublicKey({
   const derivedPubKeyNAJ = await ChainSignaturesContract.getDerivedPublicKey({
     networkId: nearNetworkId,
     contract: multichainContractId,
-    args: { path: getCanonicalizedDerivationPath(path), predecessor: signerId },
+    args: { path, predecessor: signerId },
   })
 
   if (!derivedPubKeyNAJ) {

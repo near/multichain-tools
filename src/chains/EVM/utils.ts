@@ -1,7 +1,6 @@
 import { ethers } from 'ethers'
 
 import { ChainSignaturesContract } from '../../signature'
-import { getCanonicalizedDerivationPath } from '../../kdf/utils'
 import { type FetchEVMAddressRequest } from './types'
 import { najToPubKey } from '../../kdf/kdf'
 
@@ -39,7 +38,7 @@ export async function fetchDerivedEVMAddress({
   const derivedPubKeyNAJ = await ChainSignaturesContract.getDerivedPublicKey({
     networkId: nearNetworkId,
     contract: multichainContractId,
-    args: { path: getCanonicalizedDerivationPath(path), predecessor: signerId },
+    args: { path, predecessor: signerId },
   })
 
   if (!derivedPubKeyNAJ) {

@@ -50,9 +50,6 @@ importers:
       bs58:
         specifier: ^6.0.0
         version: 6.0.0
-      canonicalize:
-        specifier: ^2.0.0
-        version: 2.0.0
       chain-registry:
         specifier: ^1.63.103
         version: 1.63.103
@@ -65,9 +62,6 @@ importers:
       ethers:
         specifier: ^6.11.1
         version: 6.13.2
-      lodash.pickby:
-        specifier: ^4.6.0
-        version: 4.6.0
       near-api-js:
         specifier: ^3.0.4
         version: 3.0.4
@@ -84,9 +78,6 @@ importers:
       '@types/bn.js':
         specifier: ^5.1.5
         version: 5.1.6
-      '@types/lodash.pickby':
-        specifier: ^4.6.9
-        version: 4.6.9
       '@typescript-eslint/eslint-plugin':
         specifier: ^6.21.0
         version: 6.21.0(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.6.2))(eslint@8.57.1)(typescript@5.6.2)
@@ -1087,12 +1078,6 @@ packages:
   '@types/json5@0.0.29':
     resolution: {integrity: sha512-dRLjCWHYg4oaA77cxO64oO+7JwCwnIzkZPdrrC71jQmQtlhM556pwKo5bUzqvZndkVbeFLIIi+9TC40JNF5hNQ==}
 
-  '@types/lodash.pickby@4.6.9':
-    resolution: {integrity: sha512-SPI248FYnyd3jOxDeJq2vX2UKQnDzqacuqdeOVqwE1MPSk8gN8TA3FcHSMQWLlpBnuHgXvgKInvywbOFbidpJA==}
-
-  '@types/lodash@4.17.9':
-    resolution: {integrity: sha512-w9iWudx1XWOHW5lQRS9iKpK/XuRhnN+0T7HvdCCd802FYkT1AMTnxndJHGrNJwRoRHkslGr4S29tjm1cT7x/7w==}
-
   '@types/long@4.0.2':
     resolution: {integrity: sha512-MqTGEo5bj5t157U6fA/BiDynNkn0YknVdh48CMPkTSpFTVmvao5UQmm7uEF6xBEo7qIMAlY/JSleYaE6VOdpaA==}
 
@@ -1418,9 +1403,6 @@ packages:
 
   caniuse-lite@1.0.30001664:
     resolution: {integrity: sha512-AmE7k4dXiNKQipgn7a2xg558IRqPN3jMQY/rOsbxDhrd0tyChwbITBfiwtnqz8bi2M5mIWbxAYBvk7W7QBUS2g==}
-
-  canonicalize@2.0.0:
-    resolution: {integrity: sha512-ulDEYPv7asdKvqahuAY35c1selLdzDwHqugK92hfkzvlDCwXRRelDkR+Er33md/PtnpqHemgkuDPanZ4fiYZ8w==}
 
   chain-registry@1.63.103:
     resolution: {integrity: sha512-TICiOH+lqHhFvyTaM1y7WWAPaJswz8NhASG24AkenoZnkaZMEAdwUCiscC7H6/BloDA3FMQvAgDeTG3HycGvKA==}
@@ -2386,9 +2368,6 @@ packages:
 
   lodash.merge@4.6.2:
     resolution: {integrity: sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ==}
-
-  lodash.pickby@4.6.0:
-    resolution: {integrity: sha512-AZV+GsS/6ckvPOVQPXSiFFacKvKB4kOQu6ynt9wz0F3LO4R9Ij4K1ddYsIytDpSgLz88JHd9P+oaLeej5/Sl7Q==}
 
   long@4.0.0:
     resolution: {integrity: sha512-XsP+KhQif4bjX1kbuSiySJFNAehNxgLb6hPRGJ9QsUr8ajHkuXGdrHmFUTUUXhDwVX2R5bY4JNZEwbUiMhV+MA==}
@@ -4493,12 +4472,6 @@ snapshots:
 
   '@types/json5@0.0.29': {}
 
-  '@types/lodash.pickby@4.6.9':
-    dependencies:
-      '@types/lodash': 4.17.9
-
-  '@types/lodash@4.17.9': {}
-
   '@types/long@4.0.2': {}
 
   '@types/node@18.15.13': {}
@@ -4906,8 +4879,6 @@ snapshots:
   camelcase@6.3.0: {}
 
   caniuse-lite@1.0.30001664: {}
-
-  canonicalize@2.0.0: {}
 
   chain-registry@1.63.103:
     dependencies:
@@ -6135,8 +6106,6 @@ snapshots:
   lodash.debounce@4.0.8: {}
 
   lodash.merge@4.6.2: {}
-
-  lodash.pickby@4.6.0: {}
 
   long@4.0.0: {}
 

@@ -31,13 +31,13 @@ export const signAndSendEVMTransaction = async (
       keypair: keyPair,
     })
 
-    const res = await evm.reconstructAndSendTransaction({
-      transactionSerialized: txSerialized,
+    const txHash = await evm.reconstructAndSendTransaction({
+      txSerialized,
       mpcSignatures: [signature],
     })
 
     return {
-      transactionHash: res.hash,
+      transactionHash: txHash,
       success: true,
     }
   } catch (e: unknown) {
@@ -77,7 +77,7 @@ export const signAndSendBTCTransaction = async (
       )
     )
 
-    const txid = await btc.reconstructAndSendTransaction({
+    const txHash = await btc.reconstructAndSendTransaction({
       nearAuthentication: req.nearAuthentication,
       path: req.derivationPath,
       mpcSignatures: signatures,
@@ -85,7 +85,7 @@ export const signAndSendBTCTransaction = async (
     })
 
     return {
-      transactionHash: txid,
+      transactionHash: txHash,
       success: true,
     }
   } catch (e: unknown) {
