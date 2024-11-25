@@ -96,7 +96,7 @@ export class Bitcoin {
     return rawSignature
   }
 
-  private async getPSBT({
+  private async createPSBT({
     address,
     data,
   }: {
@@ -164,13 +164,10 @@ export class Bitcoin {
     ).toString()
   }
 
-  async deriveAddressAndPublicKey({
-    signerId,
-    path,
-  }: {
-    signerId: string
+  async deriveAddressAndPublicKey(
+    signerId: string,
     path: KeyDerivationPath
-  }): Promise<{
+  ): Promise<{
     address: string
     publicKey: string
   }> {
@@ -219,7 +216,7 @@ export class Bitcoin {
     mpcPayloads: MPCPayloads
   }> {
     const publicKey = Buffer.from(transactionRequest.publicKey, 'hex')
-    const psbt = await this.getPSBT({
+    const psbt = await this.createPSBT({
       address: transactionRequest.from,
       data: transactionRequest,
     })

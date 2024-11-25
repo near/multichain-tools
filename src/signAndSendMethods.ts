@@ -13,14 +13,15 @@ export const signAndSendEVMTransaction = async (
   keyPair: KeyPair
 ): Promise<Response> => {
   try {
-    const evm = new EVM(req.chainConfig)
+    const evm = new EVM({
+      providerUrl: req.chainConfig.providerUrl,
+      contract: req.chainConfig.contract,
+      nearNetworkId: req.nearAuthentication.networkId,
+    })
 
-    const { txSerialized, mpcPayloads } =
-      await evm.getMPCPayloadAndTxSerialized({
-        data: req.transaction,
-        nearAuthentication: req.nearAuthentication,
-        path: req.derivationPath,
-      })
+    const { transaction, mpcPayloads } = await evm.getMPCPayloadAndTransaction(
+      req.transaction
+    )
 
     const signature = await ChainSignaturesContract.sign({
       hashedTx: mpcPayloads[0].payload,
@@ -31,8 +32,8 @@ export const signAndSendEVMTransaction = async (
       keypair: keyPair,
     })
 
-    const txHash = await evm.reconstructAndSendTransaction({
-      txSerialized,
+    const txHash = await evm.addSignatureAndBroadcast({
+      transaction,
       mpcSignatures: [signature],
     })
 
@@ -54,14 +55,16 @@ export const signAndSendBTCTransaction = async (
   keyPair: KeyPair
 ): Promise<Response> => {
   try {
-    const btc = new Bitcoin(req.chainConfig)
+    const btc = new Bitcoin({
+      providerUrl: req.chainConfig.providerUrl,
+      contract: req.chainConfig.contract,
+      network: req.chainConfig.network,
+      nearNetworkId: req.nearAuthentication.networkId,
+    })
 
-    const { txSerialized, mpcPayloads } =
-      await btc.getMPCPayloadAndTxSerialized({
-        data: req.transaction,
-        nearAuthentication: req.nearAuthentication,
-        path: req.derivationPath,
-      })
+    const { transaction, mpcPayloads } = await btc.getMPCPayloadAndTransaction(
+      req.transaction
+    )
 
     const signatures = await Promise.all(
       mpcPayloads.map(
@@ -77,11 +80,10 @@ export const signAndSendBTCTransaction = async (
       )
     )
 
-    const txHash = await btc.reconstructAndSendTransaction({
-      nearAuthentication: req.nearAuthentication,
-      path: req.derivationPath,
+    const txHash = await btc.addSignatureAndBroadcast({
+      transaction,
       mpcSignatures: signatures,
-      txSerialized,
+      publicKey: req.transaction.publicKey,
     })
 
     return {
@@ -101,14 +103,14 @@ export const signAndSendCosmosTransaction = async (
   keyPair: KeyPair
 ): Promise<Response> => {
   try {
-    const cosmos = new Cosmos(req.chainConfig)
+    const cosmos = new Cosmos({
+      contract: req.chainConfig.contract,
+      chainId: req.chainConfig.chainId,
+      nearNetworkId: req.nearAuthentication.networkId,
+    })
 
-    const { txSerialized, mpcPayloads } =
-      await cosmos.getMPCPayloadAndTxSerialized({
-        data: req.transaction,
-        nearAuthentication: req.nearAuthentication,
-        path: req.derivationPath,
-      })
+    const { transaction, mpcPayloads } =
+      await cosmos.getMPCPayloadAndTransaction(req.transaction)
 
     const signatures = await Promise.all(
       mpcPayloads.map(
@@ -124,12 +126,10 @@ export const signAndSendCosmosTransaction = async (
       )
     )
 
-    const txHash = await cosmos.reconstructAndSendTransaction({
-      data: req.transaction,
-      nearAuthentication: req.nearAuthentication,
-      path: req.derivationPath,
-      txSerialized,
+    const txHash = await cosmos.addSignatureAndBroadcast({
+      transaction,
       mpcSignatures: signatures,
+      publicKey: req.transaction.publicKey,
     })
 
     return {

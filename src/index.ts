@@ -7,10 +7,7 @@ export * from './signAndSendMethods'
 // EVM
 export { EVM } from './chains/EVM/EVM'
 
-export {
-  fetchDerivedEVMAddress,
-  fetchEVMFeeProperties,
-} from './chains/EVM/utils'
+export { fetchEVMFeeProperties } from './chains/EVM/utils'
 
 export type {
   FetchEVMAddressRequest,
@@ -21,10 +18,7 @@ export type {
 // Bitcoin
 export { Bitcoin } from './chains/Bitcoin/Bitcoin'
 
-export {
-  fetchBTCFeeProperties,
-  fetchDerivedBTCAddressAndPublicKey,
-} from './chains/Bitcoin/utils'
+export { fetchBTCFeeProperties } from './chains/Bitcoin/utils'
 
 export type {
   BitcoinPublicKeyAndAddressRequest,
@@ -35,11 +29,6 @@ export type {
 
 // Cosmos
 export { Cosmos } from './chains/Cosmos/Cosmos'
-
-export {
-  fetchDerivedCosmosAddressAndPublicKey,
-  fetchCosmosBalance,
-} from './chains/Cosmos/utils'
 
 export type {
   CosmosPublicKeyAndAddressRequest,

@@ -27,7 +27,7 @@ export class EVM {
     this.nearNetworkId = config.nearNetworkId
   }
 
-  async attachGasAndNonce(
+  private async attachGasAndNonce(
     transaction: EVMTransaction
   ): Promise<ethers.TransactionLike> {
     const fees = await fetchEVMFeeProperties(
@@ -58,6 +58,7 @@ export class EVM {
     })
   }
 
+  // TODO: Should accept a derivedPubKeyNAJ as an argument so we can remove the contract dependency
   async deriveAddressAndPublicKey(
     signerId: string,
     path: KeyDerivationPath
