@@ -205,8 +205,16 @@ export class Bitcoin implements Chain<bitcoin.Psbt, BTCTransaction> {
     window.localStorage.setItem(storageKey, transaction.toHex())
   }
 
-  getTransaction(storageKey: string): bitcoin.Psbt | undefined {
+  getTransaction(
+    storageKey: string,
+    options?: {
+      remove?: boolean
+    }
+  ): bitcoin.Psbt | undefined {
     const txSerialized = window.localStorage.getItem(storageKey)
+    if (options?.remove) {
+      window.localStorage.removeItem(storageKey)
+    }
     return txSerialized ? bitcoin.Psbt.fromHex(txSerialized) : undefined
   }
 

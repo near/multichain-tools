@@ -13,7 +13,7 @@ import { ChainSignaturesContract } from '../../signature'
 import { najToPubKey } from '../../kdf/kdf'
 import { type Chain } from '../Chain'
 
-export class EVM implements Chain<EVMTransaction, EVMTransaction> {
+export class EVM implements Chain<ethers.TransactionLike, EVMTransaction> {
   private readonly provider: ethers.JsonRpcProvider
   private readonly contract: ChainSignatureContracts
   private readonly nearNetworkId: NearNetworkIds
@@ -30,7 +30,7 @@ export class EVM implements Chain<EVMTransaction, EVMTransaction> {
 
   private async attachGasAndNonce(
     transaction: EVMTransaction
-  ): Promise<EVMTransaction> {
+  ): Promise<ethers.TransactionLike> {
     const fees = await fetchEVMFeeProperties(
       this.provider._getConnection().url,
       transaction
@@ -40,12 +40,14 @@ export class EVM implements Chain<EVMTransaction, EVMTransaction> {
       'latest'
     )
 
+    const { from, ...rest } = transaction
+
     return {
       ...fees,
       chainId: this.provider._network.chainId,
       nonce,
       type: 2,
-      ...transaction,
+      ...rest,
     }
   }
 
@@ -99,22 +101,33 @@ export class EVM implements Chain<EVMTransaction, EVMTransaction> {
     }
   }
 
-  setTransaction(transaction: EVMTransaction, storageKey: string): void {
+  setTransaction(
+    transaction: ethers.TransactionLike,
+    storageKey: string
+  ): void {
     const serializedTransaction = JSON.stringify(transaction, (_, value) =>
       typeof value === 'bigint' ? value.toString() : value
     )
     window.localStorage.setItem(storageKey, serializedTransaction)
   }
 
-  getTransaction(storageKey: string): EVMTransaction | undefined {
+  getTransaction(
+    storageKey: string,
+    options?: {
+      remove?: boolean
+    }
+  ): EVMTransaction | undefined {
     const txSerialized = window.localStorage.getItem(storageKey)
+    if (options?.remove) {
+      window.localStorage.removeItem(storageKey)
+    }
     return txSerialized ? JSON.parse(txSerialized) : undefined
   }
 
   async getMPCPayloadAndTransaction(
     transactionRequest: EVMTransaction
   ): Promise<{
-    transaction: EVMTransaction
+    transaction: ethers.TransactionLike
     mpcPayloads: MPCPayloads
   }> {
     const transaction = await this.attachGasAndNonce(transactionRequest)

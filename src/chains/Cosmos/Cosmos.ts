@@ -121,7 +121,12 @@ export class Cosmos
     window.localStorage.setItem(storageKey, JSON.stringify(transaction))
   }
 
-  getTransaction(storageKey: string):
+  getTransaction(
+    storageKey: string,
+    options?: {
+      remove?: boolean
+    }
+  ):
     | {
         address: string
         messages: EncodeObject[]
@@ -130,6 +135,9 @@ export class Cosmos
       }
     | undefined {
     const serializedTransaction = window.localStorage.getItem(storageKey)
+    if (options?.remove) {
+      window.localStorage.removeItem(storageKey)
+    }
     return serializedTransaction ? JSON.parse(serializedTransaction) : undefined
   }
 

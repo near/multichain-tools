@@ -26,7 +26,12 @@ export interface Chain<Transaction, TransactionRequest> {
   /**
    * Retrieves a transaction from local storage
    */
-  getTransaction: (storageKey: string) => Transaction | undefined
+  getTransaction: (
+    storageKey: string,
+    options?: {
+      remove?: boolean
+    }
+  ) => Transaction | undefined
 
   /**
    * Gets the MPC payload and transaction for signing
