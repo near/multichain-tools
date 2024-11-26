@@ -11,8 +11,9 @@ import { toRSV } from '../../signature/utils'
 import { type RSVSignature, type MPCSignature } from '../../signature/types'
 import { ChainSignaturesContract } from '../../signature'
 import { najToPubKey } from '../../kdf/kdf'
+import { type Chain } from '../Chain'
 
-export class EVM {
+export class EVM implements Chain<EVMTransaction, EVMTransaction> {
   private readonly provider: ethers.JsonRpcProvider
   private readonly contract: ChainSignatureContracts
   private readonly nearNetworkId: NearNetworkIds
@@ -29,7 +30,7 @@ export class EVM {
 
   private async attachGasAndNonce(
     transaction: EVMTransaction
-  ): Promise<ethers.TransactionLike> {
+  ): Promise<EVMTransaction> {
     const fees = await fetchEVMFeeProperties(
       this.provider._getConnection().url,
       transaction
@@ -39,14 +40,12 @@ export class EVM {
       'latest'
     )
 
-    const { from, ...rest } = transaction
-
     return {
       ...fees,
       chainId: this.provider._network.chainId,
       nonce,
       type: 2,
-      ...rest,
+      ...transaction,
     }
   }
 
@@ -100,17 +99,14 @@ export class EVM {
     }
   }
 
-  setTransaction(
-    transaction: ethers.TransactionLike,
-    storageKey: string
-  ): void {
+  setTransaction(transaction: EVMTransaction, storageKey: string): void {
     const serializedTransaction = JSON.stringify(transaction, (_, value) =>
       typeof value === 'bigint' ? value.toString() : value
     )
     window.localStorage.setItem(storageKey, serializedTransaction)
   }
 
-  getTransaction(storageKey: string): ethers.TransactionLike | undefined {
+  getTransaction(storageKey: string): EVMTransaction | undefined {
     const txSerialized = window.localStorage.getItem(storageKey)
     return txSerialized ? JSON.parse(txSerialized) : undefined
   }
@@ -118,7 +114,7 @@ export class EVM {
   async getMPCPayloadAndTransaction(
     transactionRequest: EVMTransaction
   ): Promise<{
-    transaction: ethers.TransactionLike
+    transaction: EVMTransaction
     mpcPayloads: MPCPayloads
   }> {
     const transaction = await this.attachGasAndNonce(transactionRequest)

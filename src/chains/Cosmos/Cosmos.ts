@@ -28,8 +28,20 @@ import { toRSV } from '../../signature/utils'
 import { bech32 } from 'bech32'
 import { najToPubKey } from '../../kdf/kdf'
 import { ChainSignaturesContract } from '../../signature'
+import { type Chain } from '../Chain'
 
-export class Cosmos {
+export class Cosmos
+  implements
+    Chain<
+      {
+        address: string
+        messages: EncodeObject[]
+        memo?: string
+        fee: StdFee
+      },
+      CosmosTransaction
+    >
+{
   private readonly nearNetworkId: NearNetworkIds
   private readonly registry: Registry
   private readonly contract: ChainSignatureContracts
@@ -57,12 +69,9 @@ export class Cosmos {
     ])
   }
 
-  async getBalance(
-    address: string,
-    chainId: CosmosNetworkIds
-  ): Promise<string> {
+  async getBalance(address: string): Promise<string> {
     try {
-      const { restUrl, denom } = await fetchChainInfo(chainId)
+      const { restUrl, denom } = await fetchChainInfo(this.chainId)
       const client = await StargateClient.connect(restUrl)
 
       const balance = await client.getBalance(address, denom)
@@ -76,12 +85,12 @@ export class Cosmos {
 
   async deriveAddressAndPublicKey(
     signerId: string,
-    path: string,
-    prefix: string
+    path: string
   ): Promise<{
     address: string
     publicKey: string
   }> {
+    const { prefix } = await fetchChainInfo(this.chainId)
     const derivedPubKeyNAJ = await ChainSignaturesContract.getDerivedPublicKey({
       networkId: this.nearNetworkId,
       contract: this.contract,

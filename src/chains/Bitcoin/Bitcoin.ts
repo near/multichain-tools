@@ -20,8 +20,9 @@ import { toRSV } from '../../signature/utils'
 import { type RSVSignature, type MPCSignature } from '../../signature/types'
 import { ChainSignaturesContract } from '../../signature'
 import { najToPubKey } from '../../kdf/kdf'
+import { type Chain } from '../Chain'
 
-export class Bitcoin {
+export class Bitcoin implements Chain<bitcoin.Psbt, BTCTransaction> {
   private readonly nearNetworkId: NearNetworkIds
   private readonly network: BTCNetworkIds
   private readonly providerUrl: string
