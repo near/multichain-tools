@@ -1,10 +1,5 @@
 import type * as ethers from 'ethers'
-import {
-  type ChainSignatureContracts,
-  type NearNetworkIds,
-  type ChainProvider,
-  type NearAuthentication,
-} from '../types'
+import { type ChainProvider, type NearAuthentication } from '../types'
 import { type KeyDerivationPath } from '../../signature'
 
 export type EVMUnsignedTransaction = ethers.TransactionLike
@@ -21,10 +16,4 @@ export interface EVMRequest {
   nearAuthentication: NearAuthentication
   fastAuthRelayerUrl?: string
   derivationPath: KeyDerivationPath
-}
-export interface FetchEVMAddressRequest {
-  signerId: string
-  path: KeyDerivationPath
-  nearNetworkId: NearNetworkIds
-  multichainContractId: ChainSignatureContracts
 }

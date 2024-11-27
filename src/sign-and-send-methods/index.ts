@@ -1,1 +1,1 @@
-export * as keyPairSignAndSend from './keypair'
+export * as keyPair from './keypair'

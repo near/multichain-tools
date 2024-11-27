@@ -1,10 +1,5 @@
 import { type KeyDerivationPath } from '../../signature'
-import {
-  type ChainSignatureContracts,
-  type NearNetworkIds,
-  type ChainProvider,
-  type NearAuthentication,
-} from '../types'
+import { type ChainProvider, type NearAuthentication } from '../types'
 import type * as bitcoin from 'bitcoinjs-lib'
 
 export interface Transaction {
@@ -104,14 +99,6 @@ export interface BitcoinRequest {
 }
 
 export type BTCNetworkIds = 'mainnet' | 'testnet' | 'regtest'
-
-export interface BitcoinPublicKeyAndAddressRequest {
-  signerId: string
-  path: KeyDerivationPath
-  btcNetworkId: BTCNetworkIds
-  nearNetworkId: NearNetworkIds
-  multichainContractId: ChainSignatureContracts
-}
 
 export interface BTCFeeRecommendation {
   fastestFee: number
