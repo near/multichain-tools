@@ -3,6 +3,7 @@ export type { SLIP044ChainId, KeyDerivationPath } from './signature/types'
 export { ChainSignaturesContract } from './contracts'
 export * as signAndSend from './sign-and-send-methods'
 export * as transactionBuilder from './transaction-builder'
+export type { Chain } from './chains/Chain'
 
 // EVM
 export { EVM } from './chains/EVM/EVM'

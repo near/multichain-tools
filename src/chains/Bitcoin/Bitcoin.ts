@@ -214,7 +214,7 @@ export class Bitcoin
       storageKey,
       JSON.stringify({
         psbt: transaction.psbt.toHex(),
-        compressedPublicKey: transaction.compressedPublicKey,
+        publicKey: transaction.publicKey,
       })
     )
   }
@@ -233,7 +233,7 @@ export class Bitcoin
     return transactionJSON
       ? {
           psbt: bitcoin.Psbt.fromHex(transactionJSON.psbt as string),
-          compressedPublicKey: transactionJSON.compressedPublicKey,
+          publicKey: transactionJSON.publicKey,
         }
       : undefined
   }
@@ -244,11 +244,14 @@ export class Bitcoin
     transaction: BTCUnsignedTransaction
     mpcPayloads: MPCPayloads
   }> {
-    const publicKey = Buffer.from(transactionRequest.compressedPublicKey, 'hex')
+    const publicKey = Buffer.from(transactionRequest.publicKey, 'hex')
     const psbt = await this.createPSBT({
       address: transactionRequest.from,
       data: transactionRequest,
     })
+
+    // Duplicate the psbt because we can't sign it twice
+    const psbtHex = psbt.toHex()
 
     const payloads: MPCPayloads = []
     // Mock signer to get the payloads as the library doesn't expose a methods with such functionality
@@ -270,21 +273,21 @@ export class Bitcoin
 
     return {
       transaction: {
-        psbt,
-        compressedPublicKey: transactionRequest.compressedPublicKey,
+        psbt: bitcoin.Psbt.fromHex(psbtHex),
+        publicKey: transactionRequest.publicKey,
       },
       mpcPayloads: payloads.sort((a, b) => a.index - b.index),
     }
   }
 
   async addSignatureAndBroadcast({
-    transaction: { psbt, compressedPublicKey },
+    transaction: { psbt, publicKey },
     mpcSignatures,
   }: {
     transaction: BTCUnsignedTransaction
     mpcSignatures: MPCSignature[]
   }): Promise<string> {
-    const publicKeyBuffer = Buffer.from(compressedPublicKey, 'hex')
+    const publicKeyBuffer = Buffer.from(publicKey, 'hex')
     const keyPair = (index: number): bitcoin.Signer => ({
       publicKey: publicKeyBuffer,
       sign: () => {

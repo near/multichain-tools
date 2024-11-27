@@ -139,10 +139,7 @@ export class Cosmos
     mpcPayloads: MPCPayloads
   }> {
     const { denom, rpcUrl, gasPrice } = await fetchChainInfo(this.chainId)
-    const publicKeyBuffer = Buffer.from(
-      transactionRequest.compressedPublicKey,
-      'hex'
-    )
+    const publicKeyBuffer = Buffer.from(transactionRequest.publicKey, 'hex')
 
     // Mock signer to get the payloads as the library doesn't expose a methods with such functionality
     const payloads: Uint8Array[] = []
@@ -209,7 +206,7 @@ export class Cosmos
     return {
       transaction: {
         address: transactionRequest.address,
-        compressedPublicKey: transactionRequest.compressedPublicKey,
+        publicKey: transactionRequest.publicKey,
         messages: updatedMessages,
         memo: transactionRequest.memo,
         fee,
@@ -229,7 +226,7 @@ export class Cosmos
     mpcSignatures: MPCSignature[]
   }): Promise<string> {
     const { denom, rpcUrl, gasPrice } = await fetchChainInfo(this.chainId)
-    const publicKeyBuffer = Buffer.from(transaction.compressedPublicKey, 'hex')
+    const publicKeyBuffer = Buffer.from(transaction.publicKey, 'hex')
 
     const signer: OfflineDirectSigner = {
       getAccounts: async () => [

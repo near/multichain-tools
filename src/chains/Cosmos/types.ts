@@ -9,7 +9,7 @@ export type CosmosNetworkIds = string
 
 export interface CosmosUnsignedTransaction {
   address: string
-  compressedPublicKey: string
+  publicKey: string
   messages: EncodeObject[]
   memo?: string
   fee: StdFee
@@ -17,7 +17,7 @@ export interface CosmosUnsignedTransaction {
 
 export interface CosmosTransactionRequest {
   address: string
-  compressedPublicKey: string
+  publicKey: string
   messages: EncodeObject[] // Array of messages (EncodeObject)
   memo?: string
   gas?: number

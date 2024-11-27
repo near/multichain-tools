@@ -69,7 +69,7 @@ interface BtcInputsAndOutputs {
 }
 
 export type BTCTransactionRequest = {
-  compressedPublicKey: string
+  publicKey: string
   from: string
   to: string
   value: string
@@ -83,7 +83,7 @@ export type BTCTransactionRequest = {
 
 export interface BTCUnsignedTransaction {
   psbt: bitcoin.Psbt
-  compressedPublicKey: string
+  publicKey: string
 }
 
 export type BTCChainConfigWithProviders = ChainProvider & {
