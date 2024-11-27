@@ -47,6 +47,7 @@ export const mpcPayloadsToTransaction = async ({
     })),
   }
 }
+
 export const responseToMpcSignature = ({
   response,
 }: {

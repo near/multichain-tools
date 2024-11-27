@@ -14,10 +14,10 @@ import {
   type NearAuthentication,
 } from '../../chains/types'
 import { parseSignedDelegateForRelayer } from '../../relayer'
-import { type ExecutionOutcomeWithId } from 'near-api-js/lib/providers'
 import { type KeyPair } from '@near-js/crypto'
 import { NEAR_MAX_GAS } from '../../signature/utils'
 import { getNearAccount } from '../utils'
+import { transactionBuilder } from '../..'
 
 interface SignArgs {
   payload: number[]
@@ -225,8 +225,6 @@ const signWithRelayer = async ({
     signedDelegate.delegateAction.publicKey.toString()
   ]
 
-  // TODO: add support for creating the signed delegate using the mpc recovery service with an oidc_token
-
   const res = await fetch(`${relayerUrl}/send_meta_tx_async`, {
     method: 'POST',
     mode: 'cors',
@@ -241,27 +239,13 @@ const signWithRelayer = async ({
     'FINAL'
   )
 
-  const signature: string = txStatus.receipts_outcome.reduce<string>(
-    (acc: string, curr: ExecutionOutcomeWithId) => {
-      if (acc) {
-        return acc
-      }
-      const { status } = curr.outcome
-      return (
-        (typeof status === 'object' &&
-          status.SuccessValue &&
-          status.SuccessValue !== '' &&
-          Buffer.from(status.SuccessValue, 'base64').toString('utf-8')) ||
-        ''
-      )
-    },
-    ''
-  )
-  if (signature) {
-    const parsedJSONSignature = JSON.parse(signature) as {
-      Ok: MPCSignature
-    }
-    return parsedJSONSignature.Ok
+  const signature = transactionBuilder.near.responseToMpcSignature({
+    response: txStatus,
+  })
+
+  if (!signature) {
+    throw new Error('Signature error, please retry')
   }
-  throw new Error('Signature error, please retry')
+
+  return signature
 }
