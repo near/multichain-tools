@@ -1,7 +1,6 @@
 import {
   GasPrice,
   SigningStargateClient,
-  StargateClient,
   type StdFee,
   assertIsDeliverTxSuccess,
   calculateFee,
@@ -70,11 +69,20 @@ export class Cosmos
   async getBalance(address: string): Promise<string> {
     try {
       const { restUrl, denom } = await fetchChainInfo(this.chainId)
-      const client = await StargateClient.connect(restUrl)
 
-      const balance = await client.getBalance(address, denom)
+      // Use REST API directly instead of StargateClient
+      const response = await fetch(
+        `${restUrl}/cosmos/bank/v1beta1/balances/${address}`
+      )
 
-      return balance.amount
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      const balance = data.balances?.find((b: any) => b.denom === denom)
+
+      return balance?.amount ?? '0'
     } catch (error) {
       console.error('Failed to fetch Cosmos balance:', error)
       throw new Error('Failed to fetch Cosmos balance')
