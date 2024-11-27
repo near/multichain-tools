@@ -1,19 +1,23 @@
 import { type Account, Contract } from '@near-js/accounts'
 import { actionCreators } from '@near-js/transactions'
-import { getNearAccount, NEAR_MAX_GAS } from './utils'
+
 import BN from 'bn.js'
 import { ethers } from 'ethers'
 
-import { type MPCSignature } from './types'
+import {
+  type MPCSignature,
+  type KeyDerivationPath,
+} from '../../signature/types'
 import {
   type NearNetworkIds,
   type ChainSignatureContracts,
   type NearAuthentication,
-} from '../chains/types'
-import { parseSignedDelegateForRelayer } from '../relayer'
-import { type ExecutionOutcomeWithId } from 'near-api-js/lib/providers'
-import { type KeyDerivationPath } from '../kdf/types'
-import { getCanonicalizedDerivationPath } from '../kdf/utils'
+} from '../../chains/types'
+import { parseSignedDelegateForRelayer } from '../../relayer'
+import { type KeyPair } from '@near-js/crypto'
+import { NEAR_MAX_GAS } from '../../signature/utils'
+import { getNearAccount } from '../utils'
+import { transactionBuilder } from '../..'
 
 interface SignArgs {
   payload: number[]
@@ -111,27 +115,31 @@ export const ChainSignaturesContract = {
     nearAuthentication,
     contract,
     relayerUrl,
+    keypair,
+    proposedDeposit,
   }: {
     hashedTx: Uint8Array
     path: KeyDerivationPath
     nearAuthentication: NearAuthentication
     contract: ChainSignatureContracts
     relayerUrl?: string
+    keypair: KeyPair
+    proposedDeposit?: BN
   }): Promise<MPCSignature> => {
     const account = await getNearAccount({
       networkId: nearAuthentication.networkId,
       accountId: nearAuthentication.accountId,
-      keypair: nearAuthentication.keypair,
+      keypair,
     })
 
     const mpcPayload = {
       payload: Array.from(ethers.getBytes(hashedTx)),
-      path: getCanonicalizedDerivationPath(path),
+      path,
       key_version: 0,
     }
 
     const deposit =
-      nearAuthentication.deposit ??
+      proposedDeposit ??
       (await ChainSignaturesContract.getCurrentFee({
         networkId: nearAuthentication.networkId,
         contract,
@@ -217,8 +225,6 @@ const signWithRelayer = async ({
     signedDelegate.delegateAction.publicKey.toString()
   ]
 
-  // TODO: add support for creating the signed delegate using the mpc recovery service with an oidc_token
-
   const res = await fetch(`${relayerUrl}/send_meta_tx_async`, {
     method: 'POST',
     mode: 'cors',
@@ -233,27 +239,13 @@ const signWithRelayer = async ({
     'FINAL'
   )
 
-  const signature: string = txStatus.receipts_outcome.reduce<string>(
-    (acc: string, curr: ExecutionOutcomeWithId) => {
-      if (acc) {
-        return acc
-      }
-      const { status } = curr.outcome
-      return (
-        (typeof status === 'object' &&
-          status.SuccessValue &&
-          status.SuccessValue !== '' &&
-          Buffer.from(status.SuccessValue, 'base64').toString('utf-8')) ||
-        ''
-      )
-    },
-    ''
-  )
-  if (signature) {
-    const parsedJSONSignature = JSON.parse(signature) as {
-      Ok: MPCSignature
-    }
-    return parsedJSONSignature.Ok
+  const signature = transactionBuilder.near.responseToMpcSignature({
+    response: txStatus,
+  })
+
+  if (!signature) {
+    throw new Error('Signature error, please retry')
   }
-  throw new Error('Signature error, please retry')
+
+  return signature
 }

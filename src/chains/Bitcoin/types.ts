@@ -1,10 +1,6 @@
-import { type KeyDerivationPath } from '../../kdf/types'
-import {
-  type ChainSignatureContracts,
-  type NearNetworkIds,
-  type ChainProvider,
-  type NearAuthentication,
-} from '../types'
+import { type KeyDerivationPath } from '../../signature'
+import { type ChainProvider, type NearAuthentication } from '../types'
+import type * as bitcoin from 'bitcoinjs-lib'
 
 export interface Transaction {
   txid: string
@@ -72,7 +68,9 @@ interface BtcInputsAndOutputs {
   outputs: BTCOutput[]
 }
 
-export type BTCTransaction = {
+export type BTCTransactionRequest = {
+  publicKey: string
+  from: string
   to: string
   value: string
 } & (
@@ -83,12 +81,17 @@ export type BTCTransaction = {
     }
 )
 
+export interface BTCUnsignedTransaction {
+  psbt: bitcoin.Psbt
+  publicKey: string
+}
+
 export type BTCChainConfigWithProviders = ChainProvider & {
   network: BTCNetworkIds
 }
 
 export interface BitcoinRequest {
-  transaction: BTCTransaction
+  transaction: BTCTransactionRequest
   chainConfig: BTCChainConfigWithProviders
   nearAuthentication: NearAuthentication
   fastAuthRelayerUrl?: string
@@ -96,14 +99,6 @@ export interface BitcoinRequest {
 }
 
 export type BTCNetworkIds = 'mainnet' | 'testnet' | 'regtest'
-
-export interface BitcoinPublicKeyAndAddressRequest {
-  signerId: string
-  path: KeyDerivationPath
-  btcNetworkId: BTCNetworkIds
-  nearNetworkId: NearNetworkIds
-  multichainContractId: ChainSignatureContracts
-}
 
 export interface BTCFeeRecommendation {
   fastestFee: number

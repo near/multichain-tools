@@ -1,29 +1,27 @@
 // types.ts
 
-import { type KeyDerivationPath } from '../../kdf/types'
-import {
-  type NearNetworkIds,
-  type ChainSignatureContracts,
-  type NearAuthentication,
-} from '../types'
+import { type StdFee } from '@cosmjs/stargate'
+import { type KeyDerivationPath } from '../../signature'
+import { type ChainSignatureContracts, type NearAuthentication } from '../types'
 import { type EncodeObject } from '@cosmjs/proto-signing'
 
 export type CosmosNetworkIds = string
 
-export interface CosmosTransaction {
+export interface CosmosUnsignedTransaction {
+  address: string
+  publicKey: string
+  messages: EncodeObject[]
+  memo?: string
+  fee: StdFee
+}
+
+export interface CosmosTransactionRequest {
+  address: string
+  publicKey: string
   messages: EncodeObject[] // Array of messages (EncodeObject)
   memo?: string
   gas?: number
 }
-
-export interface CosmosPublicKeyAndAddressRequest {
-  signerId: string
-  path: KeyDerivationPath
-  nearNetworkId: NearNetworkIds
-  multichainContractId: ChainSignatureContracts
-  prefix: string
-}
-
 export interface CosmosChainConfig {
   contract: ChainSignatureContracts
   chainId: CosmosNetworkIds
@@ -31,7 +29,7 @@ export interface CosmosChainConfig {
 
 export interface CosmosRequest {
   chainConfig: CosmosChainConfig
-  transaction: CosmosTransaction
+  transaction: CosmosTransactionRequest
   nearAuthentication: NearAuthentication
   derivationPath: KeyDerivationPath
   fastAuthRelayerUrl?: string

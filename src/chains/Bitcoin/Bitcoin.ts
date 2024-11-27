@@ -1,40 +1,48 @@
 import axios from 'axios'
 import * as bitcoin from 'bitcoinjs-lib'
 
+import { fetchBTCFeeProperties, parseBTCNetwork } from './utils'
 import {
-  fetchBTCFeeProperties,
-  fetchDerivedBTCAddressAndPublicKey,
-  parseBTCNetwork,
-} from './utils'
-import { type ChainSignatureContracts, type NearAuthentication } from '../types'
-import { type KeyDerivationPath } from '../../kdf/types'
+  type MPCPayloads,
+  type ChainSignatureContracts,
+  type NearNetworkIds,
+} from '../types'
 import {
   type BTCNetworkIds,
-  type BTCTransaction,
   type UTXO,
   type BTCOutput,
   type Transaction,
   type BTCAddressInfo,
+  type BTCTransactionRequest,
+  type BTCUnsignedTransaction,
 } from './types'
-import { toRSV } from '../../signature/utils'
-import { type RSVSignature, type MPCSignature } from '../../signature/types'
+import { toRSV, najToPubKey } from '../../signature/utils'
+import {
+  type RSVSignature,
+  type MPCSignature,
+  type KeyDerivationPath,
+} from '../../signature/types'
+import { ChainSignaturesContract } from '../../contracts'
+import { type Chain } from '../Chain'
 
-export class Bitcoin {
+export class Bitcoin
+  implements Chain<BTCTransactionRequest, BTCUnsignedTransaction>
+{
+  private readonly nearNetworkId: NearNetworkIds
   private readonly network: BTCNetworkIds
   private readonly providerUrl: string
   private readonly contract: ChainSignatureContracts
-  private readonly signer: (txHash: Uint8Array) => Promise<MPCSignature>
 
   constructor(config: {
+    nearNetworkId: NearNetworkIds
     network: BTCNetworkIds
     providerUrl: string
     contract: ChainSignatureContracts
-    signer: (txHash: Uint8Array) => Promise<MPCSignature>
   }) {
+    this.nearNetworkId = config.nearNetworkId
     this.network = config.network
     this.providerUrl = config.providerUrl
     this.contract = config.contract
-    this.signer = config.signer
   }
 
   static toBTC(satoshis: number): number {
@@ -45,16 +53,9 @@ export class Bitcoin {
     return Math.round(btc * 100000000)
   }
 
-  async fetchBalance(address: string): Promise<string> {
-    const { data } = await axios.get<BTCAddressInfo>(
-      `${this.providerUrl}/address/${address}`
-    )
-    return Bitcoin.toBTC(
-      data.chain_stats.funded_txo_sum - data.chain_stats.spent_txo_sum
-    ).toString()
-  }
-
-  async fetchTransaction(transactionId: string): Promise<bitcoin.Transaction> {
+  private async fetchTransaction(
+    transactionId: string
+  ): Promise<bitcoin.Transaction> {
     const { data } = await axios.get<Transaction>(
       `${this.providerUrl}/tx/${transactionId}`
     )
@@ -88,7 +89,7 @@ export class Bitcoin {
     return tx
   }
 
-  static parseRSVSignature(signature: RSVSignature): Buffer {
+  private static parseRSVSignature(signature: RSVSignature): Buffer {
     const r = signature.r.padStart(64, '0')
     const s = signature.s.padStart(64, '0')
 
@@ -101,33 +102,13 @@ export class Bitcoin {
     return rawSignature
   }
 
-  async sendTransaction(txHex: string): Promise<string | undefined> {
-    try {
-      const response = await axios.post<string>(`${this.providerUrl}/tx`, txHex)
-
-      if (response.status === 200) {
-        return response.data
-      }
-      throw new Error(`Failed to broadcast transaction: ${response.data}`)
-    } catch (error: unknown) {
-      console.error(error)
-      throw new Error(`Error broadcasting transaction`)
-    }
-  }
-
-  async handleTransaction(
-    data: BTCTransaction,
-    nearAuthentication: NearAuthentication,
-    path: KeyDerivationPath
-  ): Promise<string> {
-    const { address, publicKey } = await fetchDerivedBTCAddressAndPublicKey({
-      signerId: nearAuthentication.accountId,
-      path,
-      btcNetworkId: this.network,
-      nearNetworkId: nearAuthentication.networkId,
-      multichainContractId: this.contract,
-    })
-
+  private async createPSBT({
+    address,
+    data,
+  }: {
+    address: string
+    data: BTCTransactionRequest
+  }): Promise<bitcoin.Psbt> {
     const { inputs, outputs } =
       data.inputs && data.outputs
         ? data
@@ -177,25 +158,163 @@ export class Bitcoin {
       }
     })
 
-    const keyPair = {
-      publicKey,
-      sign: async (hash: Buffer): Promise<Buffer> => {
-        const mpcSignature = await this.signer(hash)
-        return Bitcoin.parseRSVSignature(toRSV(mpcSignature))
-      },
+    return psbt
+  }
+
+  async getBalance(address: string): Promise<string> {
+    const { data } = await axios.get<BTCAddressInfo>(
+      `${this.providerUrl}/address/${address}`
+    )
+    return Bitcoin.toBTC(
+      data.chain_stats.funded_txo_sum - data.chain_stats.spent_txo_sum
+    ).toString()
+  }
+
+  async deriveAddressAndPublicKey(
+    signerId: string,
+    path: KeyDerivationPath
+  ): Promise<{
+    address: string
+    publicKey: string
+  }> {
+    const derivedPubKeyNAJ = await ChainSignaturesContract.getDerivedPublicKey({
+      networkId: this.nearNetworkId,
+      contract: this.contract,
+      args: { path, predecessor: signerId },
+    })
+
+    if (!derivedPubKeyNAJ) {
+      throw new Error('Failed to get derived public key')
     }
 
-    // Sign inputs sequentially to avoid nonce issues
-    for (let index = 0; index < inputs.length; index += 1) {
-      await psbt.signInputAsync(index, keyPair)
+    const derivedKey = najToPubKey(derivedPubKeyNAJ, { compress: true })
+    const publicKeyBuffer = Buffer.from(derivedKey, 'hex')
+    const network = parseBTCNetwork(this.network)
+
+    // Use P2WPKH (Bech32) address type
+    const payment = bitcoin.payments.p2wpkh({
+      pubkey: publicKeyBuffer,
+      network,
+    })
+
+    const { address } = payment
+
+    if (!address) {
+      throw new Error('Failed to generate Bitcoin address')
+    }
+
+    return { address, publicKey: derivedKey }
+  }
+
+  setTransaction(
+    transaction: BTCUnsignedTransaction,
+    storageKey: string
+  ): void {
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        psbt: transaction.psbt.toHex(),
+        publicKey: transaction.publicKey,
+      })
+    )
+  }
+
+  getTransaction(
+    storageKey: string,
+    options?: {
+      remove?: boolean
+    }
+  ): BTCUnsignedTransaction | undefined {
+    const txSerialized = window.localStorage.getItem(storageKey)
+    if (options?.remove) {
+      window.localStorage.removeItem(storageKey)
+    }
+    const transactionJSON = txSerialized ? JSON.parse(txSerialized) : undefined
+    return transactionJSON
+      ? {
+          psbt: bitcoin.Psbt.fromHex(transactionJSON.psbt as string),
+          publicKey: transactionJSON.publicKey,
+        }
+      : undefined
+  }
+
+  async getMPCPayloadAndTransaction(
+    transactionRequest: BTCTransactionRequest
+  ): Promise<{
+    transaction: BTCUnsignedTransaction
+    mpcPayloads: MPCPayloads
+  }> {
+    const publicKey = Buffer.from(transactionRequest.publicKey, 'hex')
+    const psbt = await this.createPSBT({
+      address: transactionRequest.from,
+      data: transactionRequest,
+    })
+
+    // Duplicate the psbt because we can't sign it twice
+    const psbtHex = psbt.toHex()
+
+    const payloads: MPCPayloads = []
+    // Mock signer to get the payloads as the library doesn't expose a methods with such functionality
+    const keyPair = (index: number): bitcoin.Signer => ({
+      publicKey,
+      sign: (hash) => {
+        payloads.push({
+          index,
+          payload: new Uint8Array(hash),
+        })
+        // The return it's intentionally wrong as this is a mock signer
+        return Buffer.from(new Array(64).fill(0))
+      },
+    })
+    for (let index = 0; index < psbt.txInputs.length; index += 1) {
+      // TODO: check if you can double sign it, otherwise you will have to clone the psbt before signing
+      psbt.signInput(index, keyPair(index))
+    }
+
+    return {
+      transaction: {
+        psbt: bitcoin.Psbt.fromHex(psbtHex),
+        publicKey: transactionRequest.publicKey,
+      },
+      mpcPayloads: payloads.sort((a, b) => a.index - b.index),
+    }
+  }
+
+  async addSignatureAndBroadcast({
+    transaction: { psbt, publicKey },
+    mpcSignatures,
+  }: {
+    transaction: BTCUnsignedTransaction
+    mpcSignatures: MPCSignature[]
+  }): Promise<string> {
+    const publicKeyBuffer = Buffer.from(publicKey, 'hex')
+    const keyPair = (index: number): bitcoin.Signer => ({
+      publicKey: publicKeyBuffer,
+      sign: () => {
+        const mpcSignature = mpcSignatures[index]
+        return Bitcoin.parseRSVSignature(toRSV(mpcSignature))
+      },
+    })
+    for (let index = 0; index < psbt.txInputs.length; index += 1) {
+      psbt.signInput(index, keyPair(index))
     }
 
     psbt.finalizeAllInputs()
-    const txid = await this.sendTransaction(psbt.extractTransaction().toHex())
 
-    if (txid) {
-      return txid
+    try {
+      const response = await axios.post<string>(
+        `${this.providerUrl}/tx`,
+        psbt.extractTransaction().toHex()
+      )
+
+      if (response.status === 200) {
+        return response.data
+      }
+
+      throw new Error(`Failed to broadcast transaction: ${response.data}`)
+    } catch (error: unknown) {
+      console.error(error)
+      throw new Error(`Error broadcasting transaction`)
     }
-    throw new Error('Failed to broadcast transaction')
   }
 }
