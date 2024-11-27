@@ -5,15 +5,22 @@ import {
   type ChainSignatureContracts,
   type NearNetworkIds,
 } from '../types'
-import { type EVMTransaction } from './types'
-import { type KeyDerivationPath } from '../../kdf/types'
-import { toRSV } from '../../signature/utils'
-import { type RSVSignature, type MPCSignature } from '../../signature/types'
-import { ChainSignaturesContract } from '../../signature'
-import { najToPubKey } from '../../kdf/kdf'
+import {
+  type EVMTransactionRequest,
+  type EVMUnsignedTransaction,
+} from './types'
+import { toRSV, najToPubKey } from '../../signature/utils'
+import {
+  type RSVSignature,
+  type MPCSignature,
+  type KeyDerivationPath,
+} from '../../signature/types'
+import { ChainSignaturesContract } from '../../contracts'
 import { type Chain } from '../Chain'
 
-export class EVM implements Chain<ethers.TransactionLike, EVMTransaction> {
+export class EVM
+  implements Chain<EVMTransactionRequest, EVMUnsignedTransaction>
+{
   private readonly provider: ethers.JsonRpcProvider
   private readonly contract: ChainSignatureContracts
   private readonly nearNetworkId: NearNetworkIds
@@ -29,8 +36,8 @@ export class EVM implements Chain<ethers.TransactionLike, EVMTransaction> {
   }
 
   private async attachGasAndNonce(
-    transaction: EVMTransaction
-  ): Promise<ethers.TransactionLike> {
+    transaction: EVMTransactionRequest
+  ): Promise<EVMUnsignedTransaction> {
     const fees = await fetchEVMFeeProperties(
       this.provider._getConnection().url,
       transaction
@@ -102,7 +109,7 @@ export class EVM implements Chain<ethers.TransactionLike, EVMTransaction> {
   }
 
   setTransaction(
-    transaction: ethers.TransactionLike,
+    transaction: EVMUnsignedTransaction,
     storageKey: string
   ): void {
     const serializedTransaction = JSON.stringify(transaction, (_, value) =>
@@ -116,7 +123,7 @@ export class EVM implements Chain<ethers.TransactionLike, EVMTransaction> {
     options?: {
       remove?: boolean
     }
-  ): EVMTransaction | undefined {
+  ): EVMUnsignedTransaction | undefined {
     const txSerialized = window.localStorage.getItem(storageKey)
     if (options?.remove) {
       window.localStorage.removeItem(storageKey)
@@ -125,9 +132,9 @@ export class EVM implements Chain<ethers.TransactionLike, EVMTransaction> {
   }
 
   async getMPCPayloadAndTransaction(
-    transactionRequest: EVMTransaction
+    transactionRequest: EVMTransactionRequest
   ): Promise<{
-    transaction: ethers.TransactionLike
+    transaction: EVMUnsignedTransaction
     mpcPayloads: MPCPayloads
   }> {
     const transaction = await this.attachGasAndNonce(transactionRequest)
@@ -150,7 +157,7 @@ export class EVM implements Chain<ethers.TransactionLike, EVMTransaction> {
     transaction,
     mpcSignatures,
   }: {
-    transaction: ethers.TransactionLike
+    transaction: EVMUnsignedTransaction
     mpcSignatures: MPCSignature[]
   }): Promise<string> {
     try {

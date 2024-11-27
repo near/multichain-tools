@@ -1,8 +1,7 @@
 export type { NearNetworkIds, ChainSignatureContracts } from './chains/types'
-export type { SLIP044ChainId, KeyDerivationPath } from './kdf/types'
-export { ChainSignaturesContract } from './signature/ChainSignaturesContract/ChainSignaturesContract'
-export * from './signature/near'
-export * from './signAndSendMethods'
+export type { SLIP044ChainId, KeyDerivationPath } from './signature/types'
+export { ChainSignaturesContract } from './contracts'
+export * from './sign-and-send-methods/keypair'
 
 // EVM
 export { EVM } from './chains/EVM/EVM'

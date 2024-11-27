@@ -1,7 +1,6 @@
-import { type MPCSignature } from '../signature/types'
-import { type KeyDerivationPath } from '../kdf/types'
+import { type MPCSignature, type KeyDerivationPath } from '../signature/types'
 
-export interface Chain<Transaction, TransactionRequest> {
+export interface Chain<TransactionRequest, UnsignedTransaction> {
   /**
    * Gets the balance for a given address
    */
@@ -21,7 +20,7 @@ export interface Chain<Transaction, TransactionRequest> {
   /**
    * Stores a transaction in local storage
    */
-  setTransaction: (transaction: Transaction, storageKey: string) => void
+  setTransaction: (transaction: UnsignedTransaction, storageKey: string) => void
 
   /**
    * Retrieves a transaction from local storage
@@ -31,7 +30,7 @@ export interface Chain<Transaction, TransactionRequest> {
     options?: {
       remove?: boolean
     }
-  ) => Transaction | undefined
+  ) => UnsignedTransaction | undefined
 
   /**
    * Gets the MPC payload and transaction for signing
@@ -39,7 +38,7 @@ export interface Chain<Transaction, TransactionRequest> {
   getMPCPayloadAndTransaction: (
     transactionRequest: TransactionRequest
   ) => Promise<{
-    transaction: Transaction
+    transaction: UnsignedTransaction
     mpcPayloads: Array<{
       index: number
       payload: Uint8Array
@@ -50,7 +49,7 @@ export interface Chain<Transaction, TransactionRequest> {
    * Adds signatures to transaction and broadcasts it
    */
   addSignatureAndBroadcast: (params: {
-    transaction: Transaction
+    transaction: UnsignedTransaction
     mpcSignatures: MPCSignature[]
     publicKey: string
   }) => Promise<string>

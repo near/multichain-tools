@@ -4,13 +4,12 @@ import type {
   NetworkId,
 } from '@near-wallet-selector/core'
 import { type MPCPayloads, type ChainSignatureContracts } from '../chains/types'
-import { type KeyDerivationPath } from '../kdf/types'
-import { ChainSignaturesContract } from './ChainSignaturesContract/ChainSignaturesContract'
-import { type MPCSignature } from './types'
+import { type KeyDerivationPath, type MPCSignature } from '../signature/types'
+import { ChainSignaturesContract } from '../contracts'
 import { type ExecutionOutcomeWithId } from 'near-api-js/lib/providers'
-import { NEAR_MAX_GAS } from './utils'
+import { NEAR_MAX_GAS } from '../signature/utils'
 
-export const nearWallet = {
+export const near = {
   utils: {
     mpcPayloadsToTransaction: async ({
       networkId,

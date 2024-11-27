@@ -22,25 +22,23 @@ import {
   type ChainSignatureContracts,
   type NearNetworkIds,
 } from '../types'
-import { type CosmosTransaction, type CosmosNetworkIds } from './types'
-import { type MPCSignature, type RSVSignature } from '../../signature/types'
-import { toRSV } from '../../signature/utils'
-import { bech32 } from 'bech32'
-import { najToPubKey } from '../../kdf/kdf'
-import { ChainSignaturesContract } from '../../signature'
+import {
+  type CosmosNetworkIds,
+  type CosmosTransactionRequest,
+  type CosmosUnsignedTransaction,
+} from './types'
+import {
+  type MPCSignature,
+  type RSVSignature,
+  type KeyDerivationPath,
+} from '../../signature/types'
+import { toRSV, najToPubKey } from '../../signature/utils'
+import { ChainSignaturesContract } from '../../contracts'
 import { type Chain } from '../Chain'
+import { bech32 } from 'bech32'
 
 export class Cosmos
-  implements
-    Chain<
-      {
-        address: string
-        messages: EncodeObject[]
-        memo?: string
-        fee: StdFee
-      },
-      CosmosTransaction
-    >
+  implements Chain<CosmosTransactionRequest, CosmosUnsignedTransaction>
 {
   private readonly nearNetworkId: NearNetworkIds
   private readonly registry: Registry
@@ -85,7 +83,7 @@ export class Cosmos
 
   async deriveAddressAndPublicKey(
     signerId: string,
-    path: string
+    path: KeyDerivationPath
   ): Promise<{
     address: string
     publicKey: string
@@ -126,14 +124,7 @@ export class Cosmos
     options?: {
       remove?: boolean
     }
-  ):
-    | {
-        address: string
-        messages: EncodeObject[]
-        memo?: string
-        fee: StdFee
-      }
-    | undefined {
+  ): CosmosUnsignedTransaction | undefined {
     const serializedTransaction = window.localStorage.getItem(storageKey)
     if (options?.remove) {
       window.localStorage.removeItem(storageKey)
@@ -142,18 +133,16 @@ export class Cosmos
   }
 
   async getMPCPayloadAndTransaction(
-    transactionRequest: CosmosTransaction
+    transactionRequest: CosmosTransactionRequest
   ): Promise<{
-    transaction: {
-      address: string
-      messages: EncodeObject[]
-      fee: StdFee
-      memo?: string
-    }
+    transaction: CosmosUnsignedTransaction
     mpcPayloads: MPCPayloads
   }> {
     const { denom, rpcUrl, gasPrice } = await fetchChainInfo(this.chainId)
-    const publicKeyBuffer = Buffer.from(transactionRequest.publicKey, 'hex')
+    const publicKeyBuffer = Buffer.from(
+      transactionRequest.compressedPublicKey,
+      'hex'
+    )
 
     // Mock signer to get the payloads as the library doesn't expose a methods with such functionality
     const payloads: Uint8Array[] = []
@@ -220,9 +209,10 @@ export class Cosmos
     return {
       transaction: {
         address: transactionRequest.address,
+        compressedPublicKey: transactionRequest.compressedPublicKey,
         messages: updatedMessages,
-        fee,
         memo: transactionRequest.memo,
+        fee,
       },
       mpcPayloads: payloads.map((payload, index) => ({
         index,
@@ -234,19 +224,12 @@ export class Cosmos
   async addSignatureAndBroadcast({
     transaction,
     mpcSignatures,
-    publicKey,
   }: {
-    transaction: {
-      address: string
-      messages: EncodeObject[]
-      memo?: string
-      fee: StdFee
-    }
+    transaction: CosmosUnsignedTransaction
     mpcSignatures: MPCSignature[]
-    publicKey: string
   }): Promise<string> {
     const { denom, rpcUrl, gasPrice } = await fetchChainInfo(this.chainId)
-    const publicKeyBuffer = Buffer.from(publicKey, 'hex')
+    const publicKeyBuffer = Buffer.from(transaction.compressedPublicKey, 'hex')
 
     const signer: OfflineDirectSigner = {
       getAccounts: async () => [

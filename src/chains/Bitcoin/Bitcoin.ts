@@ -7,22 +7,27 @@ import {
   type ChainSignatureContracts,
   type NearNetworkIds,
 } from '../types'
-import { type KeyDerivationPath } from '../../kdf/types'
 import {
   type BTCNetworkIds,
-  type BTCTransaction,
   type UTXO,
   type BTCOutput,
   type Transaction,
   type BTCAddressInfo,
+  type BTCTransactionRequest,
+  type BTCUnsignedTransaction,
 } from './types'
-import { toRSV } from '../../signature/utils'
-import { type RSVSignature, type MPCSignature } from '../../signature/types'
-import { ChainSignaturesContract } from '../../signature'
-import { najToPubKey } from '../../kdf/kdf'
+import { toRSV, najToPubKey } from '../../signature/utils'
+import {
+  type RSVSignature,
+  type MPCSignature,
+  type KeyDerivationPath,
+} from '../../signature/types'
+import { ChainSignaturesContract } from '../../contracts'
 import { type Chain } from '../Chain'
 
-export class Bitcoin implements Chain<bitcoin.Psbt, BTCTransaction> {
+export class Bitcoin
+  implements Chain<BTCTransactionRequest, BTCUnsignedTransaction>
+{
   private readonly nearNetworkId: NearNetworkIds
   private readonly network: BTCNetworkIds
   private readonly providerUrl: string
@@ -102,7 +107,7 @@ export class Bitcoin implements Chain<bitcoin.Psbt, BTCTransaction> {
     data,
   }: {
     address: string
-    data: BTCTransaction
+    data: BTCTransactionRequest
   }): Promise<bitcoin.Psbt> {
     const { inputs, outputs } =
       data.inputs && data.outputs
@@ -201,8 +206,17 @@ export class Bitcoin implements Chain<bitcoin.Psbt, BTCTransaction> {
     return { address, publicKey: derivedKey }
   }
 
-  setTransaction(transaction: bitcoin.Psbt, storageKey: string): void {
-    window.localStorage.setItem(storageKey, transaction.toHex())
+  setTransaction(
+    transaction: BTCUnsignedTransaction,
+    storageKey: string
+  ): void {
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        psbt: transaction.psbt.toHex(),
+        compressedPublicKey: transaction.compressedPublicKey,
+      })
+    )
   }
 
   getTransaction(
@@ -210,21 +224,27 @@ export class Bitcoin implements Chain<bitcoin.Psbt, BTCTransaction> {
     options?: {
       remove?: boolean
     }
-  ): bitcoin.Psbt | undefined {
+  ): BTCUnsignedTransaction | undefined {
     const txSerialized = window.localStorage.getItem(storageKey)
     if (options?.remove) {
       window.localStorage.removeItem(storageKey)
     }
-    return txSerialized ? bitcoin.Psbt.fromHex(txSerialized) : undefined
+    const transactionJSON = txSerialized ? JSON.parse(txSerialized) : undefined
+    return transactionJSON
+      ? {
+          psbt: bitcoin.Psbt.fromHex(transactionJSON.psbt as string),
+          compressedPublicKey: transactionJSON.compressedPublicKey,
+        }
+      : undefined
   }
 
   async getMPCPayloadAndTransaction(
-    transactionRequest: BTCTransaction
+    transactionRequest: BTCTransactionRequest
   ): Promise<{
-    transaction: bitcoin.Psbt
+    transaction: BTCUnsignedTransaction
     mpcPayloads: MPCPayloads
   }> {
-    const publicKey = Buffer.from(transactionRequest.publicKey, 'hex')
+    const publicKey = Buffer.from(transactionRequest.compressedPublicKey, 'hex')
     const psbt = await this.createPSBT({
       address: transactionRequest.from,
       data: transactionRequest,
@@ -249,21 +269,22 @@ export class Bitcoin implements Chain<bitcoin.Psbt, BTCTransaction> {
     }
 
     return {
-      transaction: psbt,
+      transaction: {
+        psbt,
+        compressedPublicKey: transactionRequest.compressedPublicKey,
+      },
       mpcPayloads: payloads.sort((a, b) => a.index - b.index),
     }
   }
 
   async addSignatureAndBroadcast({
-    transaction: psbt,
+    transaction: { psbt, compressedPublicKey },
     mpcSignatures,
-    publicKey,
   }: {
-    transaction: bitcoin.Psbt
+    transaction: BTCUnsignedTransaction
     mpcSignatures: MPCSignature[]
-    publicKey: string
   }): Promise<string> {
-    const publicKeyBuffer = Buffer.from(publicKey, 'hex')
+    const publicKeyBuffer = Buffer.from(compressedPublicKey, 'hex')
     const keyPair = (index: number): bitcoin.Signer => ({
       publicKey: publicKeyBuffer,
       sign: () => {

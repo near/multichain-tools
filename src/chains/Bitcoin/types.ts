@@ -1,10 +1,11 @@
-import { type KeyDerivationPath } from '../../kdf/types'
+import { type KeyDerivationPath } from '../../signature'
 import {
   type ChainSignatureContracts,
   type NearNetworkIds,
   type ChainProvider,
   type NearAuthentication,
 } from '../types'
+import type * as bitcoin from 'bitcoinjs-lib'
 
 export interface Transaction {
   txid: string
@@ -72,9 +73,9 @@ interface BtcInputsAndOutputs {
   outputs: BTCOutput[]
 }
 
-export type BTCTransaction = {
+export type BTCTransactionRequest = {
+  compressedPublicKey: string
   from: string
-  publicKey: string
   to: string
   value: string
 } & (
@@ -85,12 +86,17 @@ export type BTCTransaction = {
     }
 )
 
+export interface BTCUnsignedTransaction {
+  psbt: bitcoin.Psbt
+  compressedPublicKey: string
+}
+
 export type BTCChainConfigWithProviders = ChainProvider & {
   network: BTCNetworkIds
 }
 
 export interface BitcoinRequest {
-  transaction: BTCTransaction
+  transaction: BTCTransactionRequest
   chainConfig: BTCChainConfigWithProviders
   nearAuthentication: NearAuthentication
   fastAuthRelayerUrl?: string

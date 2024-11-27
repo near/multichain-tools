@@ -1,11 +1,11 @@
-import { Bitcoin } from './chains/Bitcoin/Bitcoin'
-import { type BitcoinRequest } from './chains/Bitcoin/types'
-import { type CosmosRequest } from './chains/Cosmos/types'
-import { Cosmos } from './chains/Cosmos/Cosmos'
-import { EVM } from './chains/EVM/EVM'
-import { type EVMRequest } from './chains/EVM/types'
-import { type Response } from './chains/types'
-import { ChainSignaturesContract } from './signature/ChainSignaturesContract/ChainSignaturesContract'
+import { Bitcoin } from '../chains/Bitcoin/Bitcoin'
+import { type BitcoinRequest } from '../chains/Bitcoin/types'
+import { type CosmosRequest } from '../chains/Cosmos/types'
+import { Cosmos } from '../chains/Cosmos/Cosmos'
+import { EVM } from '../chains/EVM/EVM'
+import { type EVMRequest } from '../chains/EVM/types'
+import { type Response } from '../chains/types'
+import { ChainSignaturesContract } from '../contracts'
 import { type KeyPair } from '@near-js/crypto'
 
 export const signAndSendEVMTransaction = async (
@@ -83,7 +83,6 @@ export const signAndSendBTCTransaction = async (
     const txHash = await btc.addSignatureAndBroadcast({
       transaction,
       mpcSignatures: signatures,
-      publicKey: req.transaction.publicKey,
     })
 
     return {
@@ -129,7 +128,6 @@ export const signAndSendCosmosTransaction = async (
     const txHash = await cosmos.addSignatureAndBroadcast({
       transaction,
       mpcSignatures: signatures,
-      publicKey: req.transaction.publicKey,
     })
 
     return {

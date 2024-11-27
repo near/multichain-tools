@@ -5,16 +5,18 @@ import {
   type ChainProvider,
   type NearAuthentication,
 } from '../types'
-import { type KeyDerivationPath } from '../../kdf/types'
+import { type KeyDerivationPath } from '../../signature'
 
-export type EVMTransaction = Omit<ethers.TransactionLike, 'from'> & {
+export type EVMUnsignedTransaction = ethers.TransactionLike
+
+export type EVMTransactionRequest = Omit<ethers.TransactionLike, 'from'> & {
   from: string
 }
 
 export type EVMChainConfigWithProviders = ChainProvider
 
 export interface EVMRequest {
-  transaction: EVMTransaction
+  transaction: EVMTransactionRequest
   chainConfig: EVMChainConfigWithProviders
   nearAuthentication: NearAuthentication
   fastAuthRelayerUrl?: string

@@ -1,10 +1,13 @@
 import { type Account, Contract } from '@near-js/accounts'
 import { actionCreators } from '@near-js/transactions'
-import { getNearAccount, NEAR_MAX_GAS } from '../utils'
+
 import BN from 'bn.js'
 import { ethers } from 'ethers'
 
-import { type MPCSignature } from '../types'
+import {
+  type MPCSignature,
+  type KeyDerivationPath,
+} from '../../signature/types'
 import {
   type NearNetworkIds,
   type ChainSignatureContracts,
@@ -12,8 +15,9 @@ import {
 } from '../../chains/types'
 import { parseSignedDelegateForRelayer } from '../../relayer'
 import { type ExecutionOutcomeWithId } from 'near-api-js/lib/providers'
-import { type KeyDerivationPath } from '../../kdf/types'
 import { type KeyPair } from '@near-js/crypto'
+import { NEAR_MAX_GAS } from '../../signature/utils'
+import { getNearAccount } from '../utils'
 
 interface SignArgs {
   payload: number[]
