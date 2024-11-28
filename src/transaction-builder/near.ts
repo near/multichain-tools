@@ -3,13 +3,17 @@ import type {
   FinalExecutionOutcome,
   NetworkId,
 } from '@near-wallet-selector/core'
-import { type MPCPayloads, type ChainSignatureContracts } from '../chains/types'
+import {
+  type MPCPayloads,
+  type ChainSignatureContracts,
+  type NFTKeysContracts,
+} from '../chains/types'
 import { type KeyDerivationPath, type MPCSignature } from '../signature/types'
 import { ChainSignaturesContract } from '../contracts'
 import { type ExecutionOutcomeWithId } from 'near-api-js/lib/providers'
 import { NEAR_MAX_GAS } from '../signature/utils'
 
-export const mpcPayloadsToTransaction = async ({
+export const mpcPayloadsToChainSigTransaction = async ({
   networkId,
   contractId,
   mpcPayloads,
@@ -40,6 +44,47 @@ export const mpcPayloadsToTransaction = async ({
             path,
             key_version: 0,
           },
+        },
+        gas: NEAR_MAX_GAS.toString(),
+        deposit: currentContractFee?.toString() || '1',
+      },
+    })),
+  }
+}
+
+export const mpcPayloadsToNFTKeysTransaction = async ({
+  networkId,
+  chainSigContract,
+  nftKeysContract,
+  mpcPayloads,
+  path,
+  tokenId,
+}: {
+  networkId: NetworkId
+  chainSigContract: ChainSignatureContracts
+  nftKeysContract: NFTKeysContracts
+  mpcPayloads: MPCPayloads
+  path: KeyDerivationPath
+  tokenId: string
+}): Promise<{
+  receiverId: string
+  actions: Action[]
+}> => {
+  const currentContractFee = await ChainSignaturesContract.getCurrentFee({
+    networkId,
+    contract: chainSigContract,
+  })
+
+  return {
+    receiverId: nftKeysContract,
+    actions: mpcPayloads.map(({ payload }) => ({
+      type: 'FunctionCall',
+      params: {
+        methodName: 'ckt_sign_hash',
+        args: {
+          token_id: tokenId,
+          path,
+          payload: Array.from(payload),
         },
         gas: NEAR_MAX_GAS.toString(),
         deposit: currentContractFee?.toString() || '1',

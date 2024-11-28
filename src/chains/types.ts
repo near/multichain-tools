@@ -6,6 +6,8 @@ Available ChainSignature contracts:
 */
 export type ChainSignatureContracts = string
 
+export type NFTKeysContracts = string
+
 export interface ChainProvider {
   providerUrl: string
   contract: ChainSignatureContracts
