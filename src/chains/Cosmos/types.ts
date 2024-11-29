@@ -34,3 +34,14 @@ export interface CosmosRequest {
   derivationPath: KeyDerivationPath
   fastAuthRelayerUrl?: string
 }
+
+export interface BalanceResponse {
+  balances: Array<{
+    denom: string
+    amount: string
+  }>
+  pagination: {
+    next_key: string | null
+    total: string
+  }
+}

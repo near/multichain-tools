@@ -1,4 +1,4 @@
-import { chains } from 'chain-registry'
+import { chains, assets } from 'chain-registry'
 
 export const fetchChainInfo = async (
   chainId: string
@@ -9,6 +9,7 @@ export const fetchChainInfo = async (
   restUrl: string
   expectedChainId: string
   gasPrice: number
+  decimals: number
 }> => {
   const chainInfo = chains.find((chain) => chain.chain_id === chainId)
   if (!chainInfo) {
@@ -34,5 +35,19 @@ export const fetchChainInfo = async (
     )
   }
 
-  return { prefix, denom, rpcUrl, restUrl, expectedChainId, gasPrice }
+  const assetList = assets.find(
+    (asset) => asset.chain_name === chainInfo.chain_name
+  )
+  const asset = assetList?.assets.find((asset) => asset.base === denom)
+  const decimals = asset?.denom_units.find(
+    (unit) => unit.denom === asset.display
+  )?.exponent
+
+  if (decimals === undefined) {
+    throw new Error(
+      `Could not find decimals for ${denom} on chain ${chainInfo.chain_name}`
+    )
+  }
+
+  return { prefix, denom, rpcUrl, restUrl, expectedChainId, gasPrice, decimals }
 }
