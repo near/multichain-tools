@@ -1,17 +1,21 @@
 import {
   GasPrice,
-  SigningStargateClient,
+  StargateClient,
   type StdFee,
   calculateFee,
 } from '@cosmjs/stargate'
 import {
   Registry,
-  type OfflineDirectSigner,
   type EncodeObject,
   makeSignBytes,
+  encodePubkey,
+  makeAuthInfoBytes,
+  makeSignDoc,
+  type TxBodyEncodeObject,
 } from '@cosmjs/proto-signing'
-import { type SignDoc } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
-import { toBase64, fromHex } from '@cosmjs/encoding'
+import { encodeSecp256k1Pubkey } from '@cosmjs/amino'
+import { TxRaw } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
+import { fromHex } from '@cosmjs/encoding'
 import { ripemd160, sha256 } from '@cosmjs/crypto'
 
 import { fetchChainInfo } from './utils'
@@ -35,6 +39,7 @@ import { toRSV, najToPubKey } from '../../signature/utils'
 import { ChainSignaturesContract } from '../../contracts'
 import { type Chain } from '../Chain'
 import { bech32 } from 'bech32'
+import { SignMode } from 'cosmjs-types/cosmos/tx/signing/v1beta1/signing'
 
 export class Cosmos
   implements Chain<CosmosTransactionRequest, CosmosUnsignedTransaction>
@@ -150,54 +155,14 @@ export class Cosmos
     mpcPayloads: MPCPayloads
   }> {
     const { denom, rpcUrl, gasPrice } = await fetchChainInfo(this.chainId)
-    const publicKeyBuffer = Buffer.from(transactionRequest.publicKey, 'hex')
-
-    // Mock signer to get the payloads as the library doesn't expose a methods with such functionality
-    const payloads: Uint8Array[] = []
-    const signer: OfflineDirectSigner = {
-      getAccounts: async () => [
-        {
-          address: transactionRequest.address,
-          algo: 'secp256k1',
-          pubkey: publicKeyBuffer,
-        },
-      ],
-      signDirect: async (signerAddress: string, signDoc: SignDoc) => {
-        if (signerAddress !== transactionRequest.address) {
-          throw new Error(`Address ${signerAddress} not found in wallet`)
-        }
-
-        const txHash = sha256(makeSignBytes(signDoc))
-        payloads.push(txHash)
-
-        return {
-          signed: signDoc,
-          signature: {
-            pub_key: {
-              type: 'tendermint/PubKeySecp256k1',
-              value: toBase64(publicKeyBuffer),
-            },
-            // The return it's intentionally wrong as this is a mock signer
-            signature: toBase64(txHash),
-          },
-        }
-      },
-    }
-
-    const client = await SigningStargateClient.connectWithSigner(
-      rpcUrl,
-      signer,
-      {
-        registry: this.registry,
-        gasPrice: GasPrice.fromString(`${gasPrice}${denom}`),
-      }
-    )
+    const publicKeyBytes = fromHex(transactionRequest.publicKey)
 
     const gasLimit = transactionRequest.gas || 200_000
     const fee = calculateFee(
       gasLimit,
       GasPrice.fromString(`${gasPrice}${denom}`)
     )
+
     const updatedMessages = transactionRequest.messages.map((msg) =>
       !msg.value.fromAddress
         ? {
@@ -207,12 +172,52 @@ export class Cosmos
         : msg
     )
 
-    await client.sign(
-      transactionRequest.address,
-      updatedMessages,
-      fee,
-      transactionRequest.memo || ''
+    const client = await StargateClient.connect(rpcUrl)
+    const accountOnChain = await client.getAccount(transactionRequest.address)
+    if (!accountOnChain) {
+      throw new Error(
+        `Account ${transactionRequest.address} does not exist on chain`
+      )
+    }
+
+    const { accountNumber, sequence } = accountOnChain
+
+    const txBodyEncodeObject = {
+      typeUrl: '/cosmos.tx.v1beta1.TxBody',
+      value: {
+        messages: updatedMessages,
+        memo: transactionRequest.memo || '',
+      },
+    }
+
+    const registry = new Registry()
+    const txBodyBytes = registry.encode(txBodyEncodeObject)
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    const pubkey = encodePubkey(encodeSecp256k1Pubkey(publicKeyBytes))
+    const signerInfo = {
+      pubkey,
+      sequence,
+    }
+
+    const authInfoBytes = makeAuthInfoBytes(
+      [signerInfo],
+      fee.amount,
+      Number(fee.gas),
+      undefined, // feeGranter
+      undefined, // feePayer
+      SignMode.SIGN_MODE_DIRECT
     )
+
+    const signDoc = makeSignDoc(
+      txBodyBytes,
+      authInfoBytes,
+      this.chainId,
+      accountNumber
+    )
+
+    const signBytes = makeSignBytes(signDoc)
+    const payload = sha256(signBytes)
 
     return {
       transaction: {
@@ -222,10 +227,12 @@ export class Cosmos
         memo: transactionRequest.memo,
         fee,
       },
-      mpcPayloads: payloads.map((payload, index) => ({
-        index,
-        payload,
-      })),
+      mpcPayloads: [
+        {
+          index: 0,
+          payload,
+        },
+      ],
     }
   }
 
@@ -236,54 +243,61 @@ export class Cosmos
     transaction: CosmosUnsignedTransaction
     mpcSignatures: MPCSignature[]
   }): Promise<string> {
-    const { denom, rpcUrl, gasPrice } = await fetchChainInfo(this.chainId)
-    const publicKeyBuffer = Buffer.from(transaction.publicKey, 'hex')
+    const { rpcUrl } = await fetchChainInfo(this.chainId)
+    const publicKeyBytes: Uint8Array = fromHex(transaction.publicKey)
 
-    const signer: OfflineDirectSigner = {
-      getAccounts: async () => [
-        {
-          address: transaction.address,
-          algo: 'secp256k1',
-          pubkey: publicKeyBuffer,
-        },
-      ],
-      signDirect: async (signerAddress: string, signDoc: SignDoc) => {
-        if (signerAddress !== transaction.address) {
-          throw new Error(`Address ${signerAddress} not found in wallet`)
-        }
+    const client = await StargateClient.connect(rpcUrl)
+    const accountOnChain = await client.getAccount(transaction.address)
+    if (!accountOnChain) {
+      throw new Error(`Account ${transaction.address} does not exist on chain`)
+    }
 
-        // TODO: Should handle multiple signatures
-        const signature = this.parseRSVSignature(toRSV(mpcSignatures[0]))
+    const sequence = accountOnChain.sequence
 
-        return {
-          signed: signDoc,
-          signature: {
-            pub_key: {
-              type: 'tendermint/PubKeySecp256k1',
-              value: toBase64(publicKeyBuffer),
-            },
-            signature: toBase64(signature),
-          },
-        }
+    const txBody: TxBodyEncodeObject = {
+      typeUrl: '/cosmos.tx.v1beta1.TxBody',
+      value: {
+        messages: transaction.messages,
+        memo: transaction.memo || '',
       },
     }
 
-    const client = await SigningStargateClient.connectWithSigner(
-      rpcUrl,
-      signer,
-      {
-        registry: this.registry,
-        gasPrice: GasPrice.fromString(`${gasPrice}${denom}`),
-      }
+    const registry = this.registry || new Registry() // Use your existing registry if available
+    const txBodyBytes = registry.encode(txBody)
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    const pubkey = encodePubkey(encodeSecp256k1Pubkey(publicKeyBytes))
+    const feeAmount = transaction.fee.amount
+    const gasLimit = Number(transaction.fee.gas)
+
+    const authInfoBytes = makeAuthInfoBytes(
+      [
+        {
+          pubkey,
+          sequence,
+        },
+      ],
+      feeAmount,
+      gasLimit,
+      undefined,
+      undefined
     )
 
-    const result = await client.signAndBroadcast(
-      transaction.address,
-      transaction.messages,
-      transaction.fee,
-      transaction.memo || ''
-    )
+    const signature = this.parseRSVSignature(toRSV(mpcSignatures[0]))
 
-    return result.transactionHash
+    const txRaw = TxRaw.fromPartial({
+      bodyBytes: txBodyBytes,
+      authInfoBytes,
+      signatures: [signature],
+    })
+
+    const txBytes = TxRaw.encode(txRaw).finish()
+    const broadcastResponse = await client.broadcastTx(txBytes)
+
+    if (broadcastResponse.code !== 0) {
+      throw new Error(`Broadcast error: ${broadcastResponse.rawLog}`)
+    }
+
+    return broadcastResponse.transactionHash
   }
 }

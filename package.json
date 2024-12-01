@@ -33,6 +33,7 @@
     "typescript": "^5.4.3"
   },
   "dependencies": {
+    "@cosmjs/amino": "^0.32.4",
     "@cosmjs/crypto": "^0.32.4",
     "@cosmjs/encoding": "^0.32.4",
     "@cosmjs/math": "^0.32.4",
