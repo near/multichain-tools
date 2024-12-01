@@ -28,6 +28,8 @@ import { type Chain } from '../Chain'
 export class Bitcoin
   implements Chain<BTCTransactionRequest, BTCUnsignedTransaction>
 {
+  private static readonly SATOSHIS_PER_BTC = 100_000_000
+
   private readonly nearNetworkId: NearNetworkIds
   private readonly network: BTCNetworkIds
   private readonly providerUrl: string
@@ -46,11 +48,11 @@ export class Bitcoin
   }
 
   static toBTC(satoshis: number): number {
-    return satoshis / 100000000
+    return satoshis / Bitcoin.SATOSHIS_PER_BTC
   }
 
   static toSatoshi(btc: number): number {
-    return Math.round(btc * 100000000)
+    return Math.round(btc * Bitcoin.SATOSHIS_PER_BTC)
   }
 
   private async fetchTransaction(
@@ -119,9 +121,7 @@ export class Bitcoin
             },
           ])
 
-    const psbt = new bitcoin.Psbt({
-      network: parseBTCNetwork(this.network),
-    })
+    const psbt = new bitcoin.Psbt({ network: parseBTCNetwork(this.network) })
 
     // Since the sender address is always P2WPKH, we can assume all inputs are P2WPKH
     await Promise.all(
@@ -145,14 +145,19 @@ export class Bitcoin
     )
 
     outputs.forEach((out: BTCOutput) => {
-      if ('script' in out) {
+      if ('script' in out && out.script) {
         psbt.addOutput({
           script: out.script,
           value: out.value,
         })
+      } else if ('address' in out && out.address) {
+        psbt.addOutput({
+          address: out.address,
+          value: out.value,
+        })
       } else {
         psbt.addOutput({
-          address: out.address || address,
+          address,
           value: out.value,
         })
       }
@@ -173,10 +178,7 @@ export class Bitcoin
   async deriveAddressAndPublicKey(
     signerId: string,
     path: KeyDerivationPath
-  ): Promise<{
-    address: string
-    publicKey: string
-  }> {
+  ): Promise<{ address: string; publicKey: string }> {
     const derivedPubKeyNAJ = await ChainSignaturesContract.getDerivedPublicKey({
       networkId: this.nearNetworkId,
       contract: this.contract,
@@ -226,16 +228,17 @@ export class Bitcoin
     }
   ): BTCUnsignedTransaction | undefined {
     const txSerialized = window.localStorage.getItem(storageKey)
+    if (!txSerialized) return undefined
+
     if (options?.remove) {
       window.localStorage.removeItem(storageKey)
     }
-    const transactionJSON = txSerialized ? JSON.parse(txSerialized) : undefined
-    return transactionJSON
-      ? {
-          psbt: bitcoin.Psbt.fromHex(transactionJSON.psbt as string),
-          publicKey: transactionJSON.publicKey,
-        }
-      : undefined
+
+    const transactionJSON = JSON.parse(txSerialized)
+    return {
+      psbt: bitcoin.Psbt.fromHex(transactionJSON.psbt as string),
+      publicKey: transactionJSON.publicKey,
+    }
   }
 
   async getMPCPayloadAndTransaction(
@@ -244,30 +247,30 @@ export class Bitcoin
     transaction: BTCUnsignedTransaction
     mpcPayloads: MPCPayloads
   }> {
-    const publicKey = Buffer.from(transactionRequest.publicKey, 'hex')
+    const publicKeyBuffer = Buffer.from(transactionRequest.publicKey, 'hex')
     const psbt = await this.createPSBT({
       address: transactionRequest.from,
       data: transactionRequest,
     })
 
-    // Duplicate the psbt because we can't sign it twice
+    // We can't double sign a PSBT, therefore we serialize the payload before to return it
     const psbtHex = psbt.toHex()
 
-    const payloads: MPCPayloads = []
-    // Mock signer to get the payloads as the library doesn't expose a methods with such functionality
+    const mpcPayloads: MPCPayloads = []
+
     const keyPair = (index: number): bitcoin.Signer => ({
-      publicKey,
-      sign: (hash) => {
-        payloads.push({
+      publicKey: publicKeyBuffer,
+      sign: (hash: Buffer): Buffer => {
+        mpcPayloads.push({
           index,
           payload: new Uint8Array(hash),
         })
-        // The return it's intentionally wrong as this is a mock signer
-        return Buffer.from(new Array(64).fill(0))
+        // Return dummy signature to satisfy the interface
+        return Buffer.alloc(64)
       },
     })
-    for (let index = 0; index < psbt.txInputs.length; index += 1) {
-      // TODO: check if you can double sign it, otherwise you will have to clone the psbt before signing
+
+    for (let index = 0; index < psbt.inputCount; index++) {
       psbt.signInput(index, keyPair(index))
     }
 
@@ -276,7 +279,7 @@ export class Bitcoin
         psbt: bitcoin.Psbt.fromHex(psbtHex),
         publicKey: transactionRequest.publicKey,
       },
-      mpcPayloads: payloads.sort((a, b) => a.index - b.index),
+      mpcPayloads: mpcPayloads.sort((a, b) => a.index - b.index),
     }
   }
 
@@ -288,6 +291,7 @@ export class Bitcoin
     mpcSignatures: MPCSignature[]
   }): Promise<string> {
     const publicKeyBuffer = Buffer.from(publicKey, 'hex')
+
     const keyPair = (index: number): bitcoin.Signer => ({
       publicKey: publicKeyBuffer,
       sign: () => {
@@ -295,26 +299,22 @@ export class Bitcoin
         return Bitcoin.parseRSVSignature(toRSV(mpcSignature))
       },
     })
-    for (let index = 0; index < psbt.txInputs.length; index += 1) {
+
+    for (let index = 0; index < psbt.inputCount; index++) {
       psbt.signInput(index, keyPair(index))
     }
 
     psbt.finalizeAllInputs()
 
-    try {
-      const response = await axios.post<string>(
-        `${this.providerUrl}/tx`,
-        psbt.extractTransaction().toHex()
-      )
+    const response = await axios.post<string>(
+      `${this.providerUrl}/tx`,
+      psbt.extractTransaction().toHex()
+    )
 
-      if (response.status === 200) {
-        return response.data
-      }
-
-      throw new Error(`Failed to broadcast transaction: ${response.data}`)
-    } catch (error: unknown) {
-      console.error(error)
-      throw new Error(`Error broadcasting transaction`)
+    if (response.status === 200 && response.data) {
+      return response.data
     }
+
+    throw new Error(`Failed to broadcast transaction: ${response.data}`)
   }
 }
