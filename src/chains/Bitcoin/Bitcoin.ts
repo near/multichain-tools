@@ -258,7 +258,7 @@ export class Bitcoin
 
     const mpcPayloads: MPCPayloads = []
 
-    const keyPair = (index: number): bitcoin.Signer => ({
+    const mockKeyPair = (index: number): bitcoin.Signer => ({
       publicKey: publicKeyBuffer,
       sign: (hash: Buffer): Buffer => {
         mpcPayloads.push({
@@ -271,7 +271,7 @@ export class Bitcoin
     })
 
     for (let index = 0; index < psbt.inputCount; index++) {
-      psbt.signInput(index, keyPair(index))
+      psbt.signInput(index, mockKeyPair(index))
     }
 
     return {
