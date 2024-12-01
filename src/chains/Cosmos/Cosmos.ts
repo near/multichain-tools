@@ -228,6 +228,7 @@ export class Cosmos
     const { rpcUrl } = await fetchChainInfo(this.chainId)
     const client = await StargateClient.connect(rpcUrl)
 
+    // Allow support for multi-sig but the package only supports single-sig
     transaction.signatures = mpcSignatures.map((sig) =>
       this.parseRSVSignature(toRSV(sig))
     )
