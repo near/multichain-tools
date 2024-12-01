@@ -115,7 +115,7 @@ export class Bitcoin
         : await fetchBTCFeeProperties(this.providerUrl, address, [
             {
               address: data.to,
-              value: Bitcoin.toSatoshi(parseFloat(data.value)),
+              value: parseFloat(data.value),
             },
           ])
 

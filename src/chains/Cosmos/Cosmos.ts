@@ -2,7 +2,6 @@ import {
   GasPrice,
   SigningStargateClient,
   type StdFee,
-  assertIsDeliverTxSuccess,
   calculateFee,
 } from '@cosmjs/stargate'
 import {
@@ -284,7 +283,6 @@ export class Cosmos
       transaction.fee,
       transaction.memo || ''
     )
-    assertIsDeliverTxSuccess(result)
 
     return result.transactionHash
   }
