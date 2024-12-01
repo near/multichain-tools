@@ -1,21 +1,15 @@
-import {
-  GasPrice,
-  StargateClient,
-  type StdFee,
-  calculateFee,
-} from '@cosmjs/stargate'
+import { GasPrice, StargateClient, calculateFee } from '@cosmjs/stargate'
 import {
   Registry,
-  type EncodeObject,
   makeSignBytes,
   encodePubkey,
   makeAuthInfoBytes,
   makeSignDoc,
   type TxBodyEncodeObject,
 } from '@cosmjs/proto-signing'
+import { toBase64, fromBase64, fromHex } from '@cosmjs/encoding'
 import { encodeSecp256k1Pubkey } from '@cosmjs/amino'
 import { TxRaw } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
-import { fromHex } from '@cosmjs/encoding'
 import { ripemd160, sha256 } from '@cosmjs/crypto'
 
 import { fetchChainInfo } from './utils'
@@ -124,15 +118,11 @@ export class Cosmos
   }
 
   setTransaction(
-    transaction: {
-      address: string
-      messages: EncodeObject[]
-      memo?: string
-      fee: StdFee
-    },
+    transaction: CosmosUnsignedTransaction,
     storageKey: string
   ): void {
-    window.localStorage.setItem(storageKey, JSON.stringify(transaction))
+    const serialized = TxRaw.encode(transaction).finish()
+    window.localStorage.setItem(storageKey, toBase64(serialized))
   }
 
   getTransaction(
@@ -141,11 +131,14 @@ export class Cosmos
       remove?: boolean
     }
   ): CosmosUnsignedTransaction | undefined {
-    const serializedTransaction = window.localStorage.getItem(storageKey)
+    const serialized = window.localStorage.getItem(storageKey)
+    if (!serialized) return undefined
+
     if (options?.remove) {
       window.localStorage.removeItem(storageKey)
     }
-    return serializedTransaction ? JSON.parse(serializedTransaction) : undefined
+
+    return TxRaw.decode(fromBase64(serialized))
   }
 
   async getMPCPayloadAndTransaction(
@@ -163,15 +156,6 @@ export class Cosmos
       GasPrice.fromString(`${gasPrice}${denom}`)
     )
 
-    const updatedMessages = transactionRequest.messages.map((msg) =>
-      !msg.value.fromAddress
-        ? {
-            ...msg,
-            value: { ...msg.value, fromAddress: transactionRequest.address },
-          }
-        : msg
-    )
-
     const client = await StargateClient.connect(rpcUrl)
     const accountOnChain = await client.getAccount(transactionRequest.address)
     if (!accountOnChain) {
@@ -182,30 +166,30 @@ export class Cosmos
 
     const { accountNumber, sequence } = accountOnChain
 
-    const txBodyEncodeObject = {
+    const txBodyEncodeObject: TxBodyEncodeObject = {
       typeUrl: '/cosmos.tx.v1beta1.TxBody',
       value: {
-        messages: updatedMessages,
+        messages: transactionRequest.messages,
         memo: transactionRequest.memo || '',
       },
     }
 
-    const registry = new Registry()
-    const txBodyBytes = registry.encode(txBodyEncodeObject)
+    const txBodyBytes = this.registry.encode(txBodyEncodeObject)
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     const pubkey = encodePubkey(encodeSecp256k1Pubkey(publicKeyBytes))
-    const signerInfo = {
-      pubkey,
-      sequence,
-    }
 
     const authInfoBytes = makeAuthInfoBytes(
-      [signerInfo],
+      [
+        {
+          pubkey,
+          sequence,
+        },
+      ],
       fee.amount,
       Number(fee.gas),
-      undefined, // feeGranter
-      undefined, // feePayer
+      undefined,
+      undefined,
       SignMode.SIGN_MODE_DIRECT
     )
 
@@ -220,13 +204,11 @@ export class Cosmos
     const payload = sha256(signBytes)
 
     return {
-      transaction: {
-        address: transactionRequest.address,
-        publicKey: transactionRequest.publicKey,
-        messages: updatedMessages,
-        memo: transactionRequest.memo,
-        fee,
-      },
+      transaction: TxRaw.fromPartial({
+        bodyBytes: txBodyBytes,
+        authInfoBytes,
+        signatures: [],
+      }),
       mpcPayloads: [
         {
           index: 0,
@@ -244,54 +226,13 @@ export class Cosmos
     mpcSignatures: MPCSignature[]
   }): Promise<string> {
     const { rpcUrl } = await fetchChainInfo(this.chainId)
-    const publicKeyBytes: Uint8Array = fromHex(transaction.publicKey)
-
     const client = await StargateClient.connect(rpcUrl)
-    const accountOnChain = await client.getAccount(transaction.address)
-    if (!accountOnChain) {
-      throw new Error(`Account ${transaction.address} does not exist on chain`)
-    }
 
-    const sequence = accountOnChain.sequence
-
-    const txBody: TxBodyEncodeObject = {
-      typeUrl: '/cosmos.tx.v1beta1.TxBody',
-      value: {
-        messages: transaction.messages,
-        memo: transaction.memo || '',
-      },
-    }
-
-    const registry = this.registry || new Registry() // Use your existing registry if available
-    const txBodyBytes = registry.encode(txBody)
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-    const pubkey = encodePubkey(encodeSecp256k1Pubkey(publicKeyBytes))
-    const feeAmount = transaction.fee.amount
-    const gasLimit = Number(transaction.fee.gas)
-
-    const authInfoBytes = makeAuthInfoBytes(
-      [
-        {
-          pubkey,
-          sequence,
-        },
-      ],
-      feeAmount,
-      gasLimit,
-      undefined,
-      undefined
+    transaction.signatures = mpcSignatures.map((sig) =>
+      this.parseRSVSignature(toRSV(sig))
     )
 
-    const signature = this.parseRSVSignature(toRSV(mpcSignatures[0]))
-
-    const txRaw = TxRaw.fromPartial({
-      bodyBytes: txBodyBytes,
-      authInfoBytes,
-      signatures: [signature],
-    })
-
-    const txBytes = TxRaw.encode(txRaw).finish()
+    const txBytes = TxRaw.encode(transaction).finish()
     const broadcastResponse = await client.broadcastTx(txBytes)
 
     if (broadcastResponse.code !== 0) {
