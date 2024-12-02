@@ -1,49 +1,4 @@
-import { fromHex } from '@cosmjs/encoding'
-import { Secp256k1, sha256, ripemd160 } from '@cosmjs/crypto'
-import { bech32 } from 'bech32'
-
-import { najToPubKey } from '../../kdf/kdf'
-import { getCanonicalizedDerivationPath } from '../../kdf/utils'
-import { type CosmosPublicKeyAndAddressRequest } from './types'
-import { chains } from 'chain-registry'
-import { StargateClient } from '@cosmjs/stargate'
-import { ChainSignaturesContract } from '../../signature/chain-signatures-contract'
-
-export async function fetchDerivedCosmosAddressAndPublicKey({
-  signerId,
-  path,
-  nearNetworkId,
-  multichainContractId,
-  prefix,
-}: CosmosPublicKeyAndAddressRequest): Promise<{
-  address: string
-  publicKey: Buffer
-}> {
-  const derivedPubKeyNAJ = await ChainSignaturesContract.getDerivedPublicKey({
-    networkId: nearNetworkId,
-    contract: multichainContractId,
-    args: { path: getCanonicalizedDerivationPath(path), predecessor: signerId },
-  })
-
-  if (!derivedPubKeyNAJ) {
-    throw new Error('Failed to get derived public key')
-  }
-
-  const derivedKey = najToPubKey(derivedPubKeyNAJ, { compress: true })
-  const publicKey = fromHex(derivedKey)
-  const address = pubkeyToAddress(publicKey, prefix)
-
-  return { address, publicKey: Buffer.from(publicKey) }
-}
-
-function pubkeyToAddress(pubkey: Uint8Array, prefix: string): string {
-  const pubkeyRaw =
-    pubkey.length === 33 ? pubkey : Secp256k1.compressPubkey(pubkey)
-  const sha256Hash = sha256(pubkeyRaw)
-  const ripemd160Hash = ripemd160(sha256Hash)
-  const address = bech32.encode(prefix, bech32.toWords(ripemd160Hash))
-  return address
-}
+import { chains, assets } from 'chain-registry'
 
 export const fetchChainInfo = async (
   chainId: string
@@ -54,6 +9,7 @@ export const fetchChainInfo = async (
   restUrl: string
   expectedChainId: string
   gasPrice: number
+  decimals: number
 }> => {
   const chainInfo = chains.find((chain) => chain.chain_id === chainId)
   if (!chainInfo) {
@@ -79,22 +35,19 @@ export const fetchChainInfo = async (
     )
   }
 
-  return { prefix, denom, rpcUrl, restUrl, expectedChainId, gasPrice }
-}
+  const assetList = assets.find(
+    (asset) => asset.chain_name === chainInfo.chain_name
+  )
+  const asset = assetList?.assets.find((asset) => asset.base === denom)
+  const decimals = asset?.denom_units.find(
+    (unit) => unit.denom === asset.display
+  )?.exponent
 
-export async function fetchCosmosBalance(
-  address: string,
-  chainId: string
-): Promise<string> {
-  try {
-    const { restUrl, denom } = await fetchChainInfo(chainId)
-    const client = await StargateClient.connect(restUrl)
-
-    const balance = await client.getBalance(address, denom)
-
-    return balance.amount
-  } catch (error) {
-    console.error('Failed to fetch Cosmos balance:', error)
-    throw new Error('Failed to fetch Cosmos balance')
+  if (decimals === undefined) {
+    throw new Error(
+      `Could not find decimals for ${denom} on chain ${chainInfo.chain_name}`
+    )
   }
+
+  return { prefix, denom, rpcUrl, restUrl, expectedChainId, gasPrice, decimals }
 }

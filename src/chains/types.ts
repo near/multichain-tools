@@ -1,6 +1,3 @@
-import { type KeyPair } from '@near-js/crypto'
-import type BN from 'bn.js'
-
 /** 
 Available ChainSignature contracts:
   - Mainnet: v1.signer
@@ -9,6 +6,8 @@ Available ChainSignature contracts:
 */
 export type ChainSignatureContracts = string
 
+export type NFTKeysContracts = string
+
 export interface ChainProvider {
   providerUrl: string
   contract: ChainSignatureContracts
@@ -16,9 +15,7 @@ export interface ChainProvider {
 
 export interface NearAuthentication {
   networkId: NearNetworkIds
-  keypair: KeyPair
   accountId: string
-  deposit?: BN
 }
 
 interface SuccessResponse {
@@ -34,3 +31,5 @@ interface FailureResponse {
 export type Response = SuccessResponse | FailureResponse
 
 export type NearNetworkIds = 'mainnet' | 'testnet'
+
+export type MPCPayloads = Array<{ index: number; payload: Uint8Array }>

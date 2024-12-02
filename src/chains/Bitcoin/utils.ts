@@ -6,15 +6,7 @@ import * as bitcoin from 'bitcoinjs-lib'
 // @ts-expect-error
 import coinselect from 'coinselect'
 
-import {
-  type BTCOutput,
-  type BitcoinPublicKeyAndAddressRequest,
-  type UTXO,
-  type BTCFeeRecommendation,
-} from './types'
-import { getCanonicalizedDerivationPath } from '../../kdf/utils'
-import { ChainSignaturesContract } from '../../signature/chain-signatures-contract'
-import { najToPubKey } from '../../kdf/kdf'
+import { type BTCOutput, type UTXO, type BTCFeeRecommendation } from './types'
 
 export async function fetchBTCFeeRate(
   providerUrl: string,
@@ -72,45 +64,6 @@ export async function fetchBTCFeeProperties(
   }
 
   return ret
-}
-
-export async function fetchDerivedBTCAddressAndPublicKey({
-  signerId,
-  path,
-  btcNetworkId,
-  nearNetworkId,
-  multichainContractId,
-}: BitcoinPublicKeyAndAddressRequest): Promise<{
-  address: string
-  publicKey: Buffer
-}> {
-  const derivedPubKeyNAJ = await ChainSignaturesContract.getDerivedPublicKey({
-    networkId: nearNetworkId,
-    contract: multichainContractId,
-    args: { path: getCanonicalizedDerivationPath(path), predecessor: signerId },
-  })
-
-  if (!derivedPubKeyNAJ) {
-    throw new Error('Failed to get derived public key')
-  }
-
-  const derivedKey = najToPubKey(derivedPubKeyNAJ, { compress: true })
-  const publicKeyBuffer = Buffer.from(derivedKey, 'hex')
-  const network = parseBTCNetwork(btcNetworkId)
-
-  // Use P2WPKH (Bech32) address type
-  const payment = bitcoin.payments.p2wpkh({
-    pubkey: publicKeyBuffer,
-    network,
-  })
-
-  const { address } = payment
-
-  if (!address) {
-    throw new Error('Failed to generate Bitcoin address')
-  }
-
-  return { address, publicKey: publicKeyBuffer }
 }
 
 export function parseBTCNetwork(network: string): bitcoin.networks.Network {
